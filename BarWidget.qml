@@ -18,8 +18,18 @@ BarWidget {
   readonly property real openPanelIndicatorWidth: button.labelWidth
   readonly property real openPanelIndicatorHeight: Math.max(Style.space(10), Math.round(Style.bar.iconSlot * 0.55))
 
+  // The panel is lazy-loaded on first use so the 3.9MB Bible can stay off
+  // disk until the reader is actually opened. open()/toggle() load it on
+  // demand and defer the open until the panel exists.
+  property bool deferredOpen: false
+
   function open() {
-    if (panelLoader.item) panelLoader.item.open()
+    if (panelLoader.item) {
+      panelLoader.item.open()
+    } else {
+      root.deferredOpen = true
+      panelLoader.active = true
+    }
   }
 
   function close() {
@@ -27,7 +37,12 @@ BarWidget {
   }
 
   function toggle() {
-    if (panelLoader.item) panelLoader.item.toggle()
+    if (panelLoader.item) {
+      panelLoader.item.toggle()
+    } else {
+      root.deferredOpen = true
+      panelLoader.active = true
+    }
   }
 
   function togglePanel() {
@@ -55,12 +70,16 @@ BarWidget {
 
   Loader {
     id: panelLoader
-    active: true
+    active: false
     source: Qt.resolvedUrl("Panel.qml")
     visible: false
     onLoaded: {
       root.injectPanel()
       Qt.callLater(root.injectPanel)
+      if (root.deferredOpen) {
+        root.deferredOpen = false
+        panelLoader.item.open()
+      }
     }
   }
 

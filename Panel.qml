@@ -40,9 +40,13 @@ Panel {
   readonly property int chapterTotal: currentBookInfo ? currentBookInfo.chapters : 0
 
   function open() {
+    if (searchField.activeFocus) searchField.focus = false
     root.controller.show()
     Qt.callLater(function() {
-      if (root.opened) setCenterHoverRevealSuppressed(true)
+      if (root.opened) {
+        setCenterHoverRevealSuppressed(true)
+        keyCatcher.forceActiveFocus()
+      }
       root.scrollToVerse()
     })
   }
@@ -50,6 +54,7 @@ Panel {
   function close() {
     setCenterHoverRevealSuppressed(false)
     root.persist()
+    if (searchField.activeFocus) searchField.focus = false
     root.controller.hide()
   }
 
@@ -65,7 +70,9 @@ Panel {
   }
 
   function setCenterHoverRevealSuppressed(value) {
-    if (root.bar && "centerHoverRevealSuppressed" in root.bar)
+    if (root.bar && typeof root.bar.setCenterHoverRevealSuppressed === "function")
+      root.bar.setCenterHoverRevealSuppressed(value)
+    else if (root.bar && "centerHoverRevealSuppressed" in root.bar)
       root.bar.centerHoverRevealSuppressed = value
   }
 
@@ -273,6 +280,12 @@ Panel {
           }
           Keys.onReturnPressed: root.submitSearch()
           Keys.onEnterPressed: root.submitSearch()
+          Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Escape) {
+              event.accepted = true
+              root.close()
+            }
+          }
         }
 
         Text {

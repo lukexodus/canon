@@ -32,7 +32,7 @@ omarchy bar move andrewbacon.canon --section right
   - Keyboard shortcut `Ctrl+C` (or `c` / `y` when search is unfocused)
   - Hover copy button on each verse row
   - Right-click on any verse or active selection
-- Use the settings button (`󰒓`) to choose your multi-verse copy format (**Numbered** `9 ... 10 ...`, **Paragraph**, or **Lines**).
+- Use the settings button (`󰒓`) to choose your multi-verse copy format (**Numbered** `⁹ ... ¹⁰ ...`, **Paragraph**, or **Lines**).
 - Escape clears active selection or closes the panel. The reading position and copy settings are saved to
   `~/.local/state/omarchy/settings/canon.json`.
 

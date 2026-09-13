@@ -749,10 +749,10 @@ Panel {
               anchors.fill: parent
               anchors.margins: Style.space(8)
               text: root.copyFormat === "numbered"
-                ? "\"9 So then, this is how you should pray: ... 13 And lead us not into temptation...\"\n— Matthew 6:9-13"
+                ? "\"⁹ So then, this is how you should pray: ... ¹³ And lead us not into temptation...\"\n— Matthew 6:9-13"
                 : (root.copyFormat === "paragraph"
                    ? "\"So then, this is how you should pray: ... And lead us not into temptation...\"\n— Matthew 6:9-13"
-                   : "\"9 So then, this is how you should pray: ...\n10 ...\n13 And lead us not into temptation...\"\n— Matthew 6:9-13")
+                   : "\"⁹ So then, this is how you should pray: ...\n¹⁰ ...\n¹³ And lead us not into temptation...\"\n— Matthew 6:9-13")
               color: mutedForeground
               font.family: contentFontFamily
               font.pixelSize: Style.font.caption

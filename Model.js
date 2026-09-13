@@ -105,14 +105,25 @@ function formatCopiedVerses(bible, bookId, chapter, startVerseOrList, endVerse, 
   } else if (fmt === "paragraph") {
     body = selected.map(function(v) { return v.text }).join(" ")
   } else if (fmt === "lines") {
-    body = selected.map(function(v) { return v.n + " " + v.text }).join("\n")
+    body = selected.map(function(v) { return toSuperscript(v.n) + " " + v.text }).join("\n")
   } else {
     // default: "numbered"
-    body = selected.map(function(v) { return v.n + " " + v.text }).join(" ")
+    body = selected.map(function(v) { return toSuperscript(v.n) + " " + v.text }).join(" ")
   }
 
   var ref = Canon.formatRefList(bookId, chapter, sortedNums, false)
   return '"' + body + '"\n— ' + ref
+}
+
+var SUPERSCRIPT_DIGITS = {
+  "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
+  "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹"
+}
+
+function toSuperscript(num) {
+  return String(num === undefined || num === null ? "" : num).replace(/[0-9]/g, function(d) {
+    return SUPERSCRIPT_DIGITS[d] || d
+  })
 }
 
 function parseState(json, bible) {

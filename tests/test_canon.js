@@ -123,10 +123,12 @@ ok("single verse copy format has quotes and em-dash",
   !singleCopied.startsWith('"13 ')
 );
 
+ok("toSuperscript converts digits", M.toSuperscript(1234567890) === "¹²³⁴⁵⁶⁷⁸⁹⁰");
+
 const rangeCopiedNumbered = M.formatCopiedVerses(bible, "Matthew", 6, 9, 13, "numbered");
-ok("range verse copy format numbered default",
-  rangeCopiedNumbered.startsWith('"9 So then, this is how you should pray') &&
-  rangeCopiedNumbered.includes(' 13 And lead us not into temptation') &&
+ok("range verse copy format numbered default uses superscript",
+  rangeCopiedNumbered.startsWith('"⁹ So then, this is how you should pray') &&
+  rangeCopiedNumbered.includes(' ¹³ And lead us not into temptation') &&
   rangeCopiedNumbered.endsWith('"\n— Matthew 6:9-13')
 );
 
@@ -134,21 +136,22 @@ const rangeCopiedParagraph = M.formatCopiedVerses(bible, "Matthew", 6, 9, 13, "p
 ok("range verse copy format paragraph",
   rangeCopiedParagraph.startsWith('"So then, this is how you should pray') &&
   !rangeCopiedParagraph.includes('"9 ') &&
+  !rangeCopiedParagraph.includes('"⁹ ') &&
   rangeCopiedParagraph.endsWith('"\n— Matthew 6:9-13')
 );
 
 const rangeCopiedLines = M.formatCopiedVerses(bible, "Matthew", 6, 9, 13, "lines");
-ok("range verse copy format lines",
-  rangeCopiedLines.includes('\n10 ') &&
-  rangeCopiedLines.includes('\n13 ') &&
+ok("range verse copy format lines uses superscript",
+  rangeCopiedLines.includes('\n¹⁰ ') &&
+  rangeCopiedLines.includes('\n¹³ ') &&
   rangeCopiedLines.endsWith('"\n— Matthew 6:9-13')
 );
 
 const omittedRangeCopied = M.formatCopiedVerses(bible, "John", 5, 3, 5, "numbered");
 ok("omitted verse in range is skipped in body",
-  omittedRangeCopied.includes('"3 ') &&
-  !omittedRangeCopied.includes(' 4 ') &&
-  omittedRangeCopied.includes(' 5 ') &&
+  omittedRangeCopied.includes('"³ ') &&
+  !omittedRangeCopied.includes(' ⁴ ') &&
+  omittedRangeCopied.includes(' ⁵ ') &&
   omittedRangeCopied.endsWith('"\n— John 5:3-5')
 );
 
@@ -160,11 +163,11 @@ ok("formatRefList non-contiguous", C.formatRefList("Matthew", 6, [9, 11, 13]) ==
 ok("formatRefList mixed ranges", C.formatRefList("Matthew", 6, [9, 10, 12, 14, 15]) === "Matthew 6:9-10, 12, 14-15");
 
 const nonContigCopied = M.formatCopiedVerses(bible, "Matthew", 6, [9, 11, 13], "numbered");
-ok("non-contiguous copy format numbered has only selected verses",
-  nonContigCopied.startsWith('"9 So then, this is how you should pray') &&
-  nonContigCopied.includes(' 11 Give us this day our daily bread.') &&
-  !nonContigCopied.includes('10 Your kingdom') &&
-  nonContigCopied.includes(' 13 And lead us not into temptation') &&
+ok("non-contiguous copy format numbered has only selected verses with superscript",
+  nonContigCopied.startsWith('"⁹ So then, this is how you should pray') &&
+  nonContigCopied.includes(' ¹¹ Give us this day our daily bread.') &&
+  !nonContigCopied.includes('¹⁰') &&
+  nonContigCopied.includes(' ¹³ And lead us not into temptation') &&
   nonContigCopied.endsWith('"\n— Matthew 6:9, 11, 13')
 );
 

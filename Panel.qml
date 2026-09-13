@@ -366,6 +366,44 @@ Panel {
     return true
   }
 
+  property bool pendingQuickCopy: false
+
+  function quickCopyCurrent() {
+    if (!root.stateReady) {
+      root.pendingQuickCopy = true
+      return false
+    }
+    var list = (root.selectedVerses && root.selectedVerses.length > 0) ? root.selectedVerses : [root.verse]
+    var res = root.copySelection(list)
+    if (res) {
+      var ref = Canon.formatRefList(root.book, root.chapter, list, false)
+      var text = Model.formatCopiedVerses(root.bible, root.book, root.chapter, list, null, root.copyFormat)
+      root.sendNotification(ref, text)
+    }
+    return res
+  }
+
+  function sendNotification(ref, body) {
+    try {
+      if (typeof Quickshell !== "undefined" && typeof Quickshell.execDetached === "function") {
+        Quickshell.execDetached([
+          "omarchy-notification-send",
+          "--app-name", "Canon",
+          "-g", "󰆏",
+          "Copied " + ref,
+          body
+        ])
+      }
+    } catch (e) {}
+  }
+
+  onStateReadyChanged: {
+    if (root.stateReady && root.pendingQuickCopy) {
+      root.pendingQuickCopy = false
+      root.quickCopyCurrent()
+    }
+  }
+
   function showCopyNotice(msg) {
     root.copyNotice = msg
     copyNoticeTimer.restart()

@@ -22,6 +22,16 @@ BarWidget {
   // disk until the reader is actually opened. open()/toggle() load it on
   // demand and defer the open until the panel exists.
   property bool deferredOpen: false
+  property bool deferredQuickCopy: false
+
+  function quickCopy() {
+    if (panelLoader.item) {
+      panelLoader.item.quickCopyCurrent()
+    } else {
+      root.deferredQuickCopy = true
+      panelLoader.active = true
+    }
+  }
 
   function open() {
     if (panelLoader.item) {
@@ -79,6 +89,9 @@ BarWidget {
       if (root.deferredOpen) {
         root.deferredOpen = false
         panelLoader.item.open()
+      } else if (root.deferredQuickCopy) {
+        root.deferredQuickCopy = false
+        panelLoader.item.quickCopyCurrent()
       }
     }
   }
@@ -91,6 +104,13 @@ BarWidget {
     function show(): void { root.open() }
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
+    function copy(): string {
+      if (panelLoader.item) {
+        return panelLoader.item.quickCopyCurrent() ? "ok" : "fail"
+      }
+      root.quickCopy()
+      return "ok"
+    }
     function back(): string {
       if (panelLoader.item) {
         return panelLoader.item.goBack() ? "ok" : "empty"
@@ -119,6 +139,7 @@ BarWidget {
 
     onPressed: function(b) {
       if (b === Qt.LeftButton) root.togglePanel()
+      else if (b === Qt.MiddleButton) root.quickCopy()
     }
 
     onWheelMoved: function(delta) {

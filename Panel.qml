@@ -33,9 +33,11 @@ Panel {
   property string copyNotice: ""
   property string searchText: ""
   property string searchError: ""
-  property string browseMode: "read" // read | books | chapters | settings
+  property string browseMode: "read" // read | books | chapters | settings | bookmarks
   property string browseTestament: "ot"
   property bool stateReady: false
+  property var bookmarks: []
+  readonly property bool isCurrentBookmarked: root.bookmarks && root.bookmarks.length > 0 && Model.findBookmarkIndex(root.bookmarks, root.book, root.chapter, root.verse, root.selectedVerses) !== -1
 
   property var navHistory: []
   property int navIndex: -1
@@ -136,6 +138,72 @@ Panel {
     root.updateCurrentHistoryEntry()
   }
 
+  function isVerseBookmarked(n) {
+    if (!root.bookmarks || root.bookmarks.length === 0) return false
+    return Model.findBookmarkIndex(root.bookmarks, root.book, root.chapter, n, [n]) !== -1
+  }
+
+  function addBookmark(bookId, chapter, verse, selectedVersesList) {
+    var v = Model.clampVerse(root.bible, bookId, chapter, verse || 1)
+    var sv = Array.isArray(selectedVersesList) && selectedVersesList.length > 0
+      ? selectedVersesList.slice()
+      : [v]
+    var verses = Model.versesFor(root.bible, bookId, chapter)
+    var preview = ""
+    if (verses && verses.length > 0) {
+      var firstV = verses[sv[0] - 1]
+      if (firstV && firstV.text) {
+        preview = firstV.text
+        if (preview.length > 90) preview = preview.substring(0, 87) + "..."
+      }
+    }
+    var label = Canon.formatRefList(bookId, chapter, sv, false)
+    var item = {
+      book: bookId,
+      chapter: chapter,
+      verse: v,
+      selectedVerses: sv,
+      label: label,
+      preview: preview
+    }
+    var list = root.bookmarks ? root.bookmarks.slice() : []
+    var idx = Model.findBookmarkIndex(list, bookId, chapter, v, sv)
+    if (idx === -1) {
+      list.unshift(item)
+    } else {
+      list[idx] = item
+    }
+    root.bookmarks = list
+    root.persist()
+    root.copyNotice = "󰃄 Bookmarked " + label
+    copyNoticeTimer.restart()
+  }
+
+  function removeBookmark(bookId, chapter, verse, selectedVersesList) {
+    var list = root.bookmarks ? root.bookmarks.slice() : []
+    var idx = Model.findBookmarkIndex(list, bookId, chapter, verse, selectedVersesList)
+    if (idx !== -1) {
+      var removed = list.splice(idx, 1)[0]
+      root.bookmarks = list
+      root.persist()
+      root.copyNotice = "󰃃 Removed bookmark"
+      copyNoticeTimer.restart()
+    }
+  }
+
+  function toggleBookmark(bookId, chapter, verse, selectedVersesList) {
+    var idx = Model.findBookmarkIndex(root.bookmarks, bookId, chapter, verse, selectedVersesList)
+    if (idx !== -1) {
+      removeBookmark(bookId, chapter, verse, selectedVersesList)
+    } else {
+      addBookmark(bookId, chapter, verse, selectedVersesList)
+    }
+  }
+
+  function toggleCurrentBookmark() {
+    root.toggleBookmark(root.book, root.chapter, root.verse, root.selectedVerses)
+  }
+
   onSettingsChanged: {
     if (root.settings && typeof root.settings.copyFormat === "string") {
       root.copyFormat = root.settings.copyFormat
@@ -202,7 +270,7 @@ Panel {
 
   function persist() {
     if (!root.stateReady) return
-    stateFile.setText(Model.serializeState(root.book, root.chapter, root.verse, root.copyFormat, root.fontSizeSetting))
+    stateFile.setText(Model.serializeState(root.book, root.chapter, root.verse, root.copyFormat, root.fontSizeSetting, root.bookmarks))
   }
 
   function applyPlace(bookId, chapter, verse, persistNow, endVerse, selectedVersesList) {
@@ -362,6 +430,7 @@ Panel {
       } else {
         root.fontSizeSetting = place.fontSize || Model.DEFAULT_FONT_SIZE
       }
+      root.bookmarks = place.bookmarks || []
       root.applyPlace(place.book, place.chapter, place.verse, false)
       root.stateReady = true
     }
@@ -376,6 +445,7 @@ Panel {
       } else {
         root.fontSizeSetting = Model.DEFAULT_FONT_SIZE
       }
+      root.bookmarks = []
       root.applyPlace(Canon.DEFAULT_BOOK, Canon.DEFAULT_CHAPTER, Canon.DEFAULT_VERSE, false)
       root.stateReady = true
     }
@@ -523,9 +593,9 @@ Panel {
 
             Column {
               id: titleCol
-              width: Math.max(Style.space(70), headerRow.width
-                - (backBtn.width + fwdBtn.width + prevBtn.width + nextBtn.width + copyBtn.width + booksBtn.width + settingsBtn.width)
-                - (headerRow.spacing * 7))
+              width: Math.max(Style.space(60), headerRow.width
+                - (backBtn.width + fwdBtn.width + prevBtn.width + nextBtn.width + copyBtn.width + bookmarkToggleBtn.width + booksBtn.width + bookmarksBtn.width + settingsBtn.width)
+                - (headerRow.spacing * 9))
               spacing: Style.space(2)
               anchors.verticalCenter: parent.verticalCenter
 
@@ -533,7 +603,9 @@ Panel {
                 width: parent.width
                 text: root.browseMode === "settings"
                   ? "Settings"
-                  : (root.browseMode === "books" ? "Select Book" : (root.browseMode === "chapters" ? root.book : Canon.formatRef(root.book, root.chapter, 0, false)))
+                  : (root.browseMode === "bookmarks"
+                     ? "Bookmarks"
+                     : (root.browseMode === "books" ? "Select Book" : (root.browseMode === "chapters" ? root.book : Canon.formatRef(root.book, root.chapter, 0, false))))
                 color: contentForeground
                 font.family: contentFontFamily
                 font.pixelSize: Style.font.subtitle
@@ -544,7 +616,11 @@ Panel {
 
               Text {
                 width: parent.width
-                text: root.browseMode === "settings" ? "Canon" : "BSB"
+                text: root.browseMode === "settings"
+                  ? "Canon"
+                  : (root.browseMode === "bookmarks"
+                     ? (root.bookmarks && root.bookmarks.length > 0 ? root.bookmarks.length + " Saved" : "Saved Verses")
+                     : "BSB")
                 color: mutedForeground
                 font.family: contentFontFamily
                 font.pixelSize: Style.font.caption
@@ -579,6 +655,20 @@ Panel {
             }
 
             Button {
+              id: bookmarkToggleBtn
+              width: Style.space(28)
+              implicitHeight: Style.space(28)
+              horizontalPadding: 0
+              verticalPadding: 0
+              iconText: root.isCurrentBookmarked ? "󰃄" : "󰃃"
+              foreground: root.isCurrentBookmarked ? accentColor : contentForeground
+              tooltipText: root.isCurrentBookmarked
+                ? "Remove bookmark for " + (root.hasMultiSelection ? Canon.formatRefList(root.book, root.chapter, root.selectedVerses, false) : Canon.formatRef(root.book, root.chapter, root.verse, false))
+                : "Bookmark " + (root.hasMultiSelection ? Canon.formatRefList(root.book, root.chapter, root.selectedVerses, false) : Canon.formatRef(root.book, root.chapter, root.verse, false))
+              onClicked: root.toggleCurrentBookmark()
+            }
+
+            Button {
               id: booksBtn
               width: Style.space(28)
               implicitHeight: Style.space(28)
@@ -590,6 +680,21 @@ Panel {
               onClicked: {
                 if (root.browseMode === "books" || root.browseMode === "chapters") root.browseMode = "read"
                 else root.openBooks(root.currentBookInfo && root.currentBookInfo.testament === "nt" ? "nt" : "ot")
+              }
+            }
+
+            Button {
+              id: bookmarksBtn
+              width: Style.space(28)
+              implicitHeight: Style.space(28)
+              horizontalPadding: 0
+              verticalPadding: 0
+              iconText: "󰚌"
+              foreground: root.browseMode === "bookmarks" ? accentColor : mutedForeground
+              tooltipText: "Bookmarks"
+              onClicked: {
+                if (root.browseMode === "bookmarks") root.browseMode = "read"
+                else root.browseMode = "bookmarks"
               }
             }
 
@@ -669,6 +774,7 @@ Panel {
 
             readonly property bool isSelected: root.isVerseSelected(modelData.n)
             readonly property bool isCurrent: modelData.n === root.verse
+            readonly property bool isBookmarked: root.isVerseBookmarked(modelData.n)
 
             width: verseList.width
             implicitHeight: rowContent.implicitHeight + Style.space(6)
@@ -689,13 +795,28 @@ Panel {
 
               Text {
                 id: verseText
-                width: parent.width - (verseMouse.containsMouse || isSelected ? Style.space(28) : 0)
+                width: parent.width - (verseMouse.containsMouse || isSelected || isBookmarked ? Style.space(56) : 0)
                 text: modelData.n + "  " + modelData.text
                 color: isSelected ? root.accentColor : (modelData.omitted ? mutedForeground : contentForeground)
                 font.italic: modelData.omitted
                 font.family: contentFontFamily
                 font.pixelSize: root.versePixelSize
                 wrapMode: Text.WordWrap
+              }
+
+              Button {
+                width: Style.space(24)
+                implicitHeight: Style.space(24)
+                anchors.verticalCenter: parent.verticalCenter
+                visible: verseMouse.containsMouse || isBookmarked
+                horizontalPadding: 0
+                verticalPadding: 0
+                iconText: isBookmarked ? "󰃄" : "󰃃"
+                foreground: isBookmarked ? root.accentColor : contentForeground
+                tooltipText: isBookmarked
+                  ? "Remove bookmark for verse " + modelData.n
+                  : "Bookmark verse " + modelData.n
+                onClicked: root.toggleBookmark(root.book, root.chapter, modelData.n, [modelData.n])
               }
 
               Button {
@@ -995,6 +1116,160 @@ Panel {
                 font.family: contentFontFamily
                 font.pixelSize: Style.font.caption
                 wrapMode: Text.WordWrap
+              }
+            }
+          }
+        }
+
+        Item {
+          id: bookmarksView
+          width: parent.width
+          height: verseList.height
+          visible: root.browseMode === "bookmarks"
+
+          Column {
+            anchors.centerIn: parent
+            width: parent.width - Style.space(40)
+            spacing: Style.space(8)
+            visible: !root.bookmarks || root.bookmarks.length === 0
+
+            Text {
+              anchors.horizontalCenter: parent.horizontalCenter
+              text: "󰃃"
+              color: mutedForeground
+              font.family: contentFontFamily
+              font.pixelSize: Style.space(36)
+            }
+
+            Text {
+              anchors.horizontalCenter: parent.horizontalCenter
+              text: "No Bookmarks Yet"
+              color: contentForeground
+              font.family: contentFontFamily
+              font.pixelSize: Style.font.bodySmall
+              font.bold: true
+            }
+
+            Text {
+              anchors.horizontalCenter: parent.horizontalCenter
+              width: parent.width
+              text: "Click the bookmark icon in the header or next to any verse to save passages here for quick access."
+              color: mutedForeground
+              font.family: contentFontFamily
+              font.pixelSize: Style.font.caption
+              horizontalAlignment: Text.AlignHCenter
+              wrapMode: Text.WordWrap
+            }
+          }
+
+          ListView {
+            id: bookmarksList
+            anchors.fill: parent
+            clip: true
+            spacing: Style.space(6)
+            boundsBehavior: Flickable.StopAtBounds
+            model: root.bookmarks
+            visible: root.bookmarks && root.bookmarks.length > 0
+
+            delegate: Rectangle {
+              id: bmItem
+              required property var modelData
+              required property int index
+              width: bookmarksList.width
+              implicitHeight: bmRow.implicitHeight + Style.space(12)
+              radius: Style.space(4)
+              color: bmMouse.containsMouse
+                ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.06)
+                : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.02)
+              border.width: 1
+              border.color: bmMouse.containsMouse
+                ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.3)
+                : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
+
+              Row {
+                id: bmRow
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Style.space(8)
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(8)
+
+                Column {
+                  width: parent.width - bmActions.width - Style.space(8)
+                  spacing: Style.space(2)
+                  anchors.verticalCenter: parent.verticalCenter
+
+                  Text {
+                    width: parent.width
+                    text: modelData.label || Canon.formatRefList(modelData.book, modelData.chapter, modelData.selectedVerses, false)
+                    color: root.accentColor
+                    font.family: contentFontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    font.bold: true
+                    elide: Text.ElideRight
+                  }
+
+                  Text {
+                    width: parent.width
+                    text: modelData.preview || ""
+                    color: mutedForeground
+                    font.family: contentFontFamily
+                    font.pixelSize: Style.font.caption
+                    maxLineCount: 2
+                    elide: Text.ElideRight
+                    wrapMode: Text.WordWrap
+                    visible: modelData.preview && modelData.preview !== ""
+                  }
+                }
+
+                Row {
+                  id: bmActions
+                  spacing: Style.space(4)
+                  anchors.verticalCenter: parent.verticalCenter
+
+                  Button {
+                    width: Style.space(26)
+                    implicitHeight: Style.space(26)
+                    horizontalPadding: 0
+                    verticalPadding: 0
+                    iconText: "󰆏"
+                    foreground: contentForeground
+                    tooltipText: "Copy " + modelData.label
+                    onClicked: {
+                      var copied = Model.formatCopiedVerses(root.bible, modelData.book, modelData.chapter, modelData.selectedVerses, null, root.copyFormat)
+                      Quickshell.clipboardText = copied
+                      root.copyNotice = "󰄬 Copied " + modelData.label
+                      copyNoticeTimer.restart()
+                    }
+                  }
+
+                  Button {
+                    width: Style.space(26)
+                    implicitHeight: Style.space(26)
+                    horizontalPadding: 0
+                    verticalPadding: 0
+                    iconText: "󰆴"
+                    foreground: contentForeground
+                    tooltipText: "Delete bookmark"
+                    onClicked: root.removeBookmark(modelData.book, modelData.chapter, modelData.verse, modelData.selectedVerses)
+                  }
+                }
+              }
+
+              MouseArea {
+                id: bmMouse
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: bmActions.width + Style.space(12)
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                acceptedButtons: Qt.LeftButton
+                onClicked: {
+                  root.applyPlace(modelData.book, modelData.chapter, modelData.verse, true, null, modelData.selectedVerses)
+                  root.browseMode = "read"
+                }
               }
             }
           }

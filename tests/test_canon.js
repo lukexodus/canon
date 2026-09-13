@@ -287,5 +287,52 @@ ok("pushHistory caps at limit", (() => {
   return s.history.length === 3 && s.history[0].book === "Exodus" && s.index === 2;
 })());
 
+ok("findBookmarkIndex finds single verse", (() => {
+  const bms = [
+    { book: "John", chapter: 3, verse: 16, selectedVerses: [16] },
+    { book: "Romans", chapter: 8, verse: 28, selectedVerses: [28, 29, 30] }
+  ];
+  return M.findBookmarkIndex(bms, "John", 3, 16, [16]) === 0 &&
+         M.findBookmarkIndex(bms, "John", 3, 16) === 0;
+})());
+
+ok("findBookmarkIndex finds multi-verse range", (() => {
+  const bms = [
+    { book: "John", chapter: 3, verse: 16, selectedVerses: [16] },
+    { book: "Romans", chapter: 8, verse: 28, selectedVerses: [28, 29, 30] }
+  ];
+  return M.findBookmarkIndex(bms, "Romans", 8, 28, [28, 29, 30]) === 1 &&
+         M.findBookmarkIndex(bms, "Romans", 8, 28, [28]) === -1;
+})());
+
+ok("findBookmarkIndex returns -1 when not bookmarked", (() => {
+  const bms = [{ book: "John", chapter: 3, verse: 16, selectedVerses: [16] }];
+  return M.findBookmarkIndex(bms, "John", 3, 17) === -1 &&
+         M.findBookmarkIndex(bms, "Matthew", 6, 13) === -1;
+})());
+
+ok("parseState parses valid bookmarks and filters corrupt ones", (() => {
+  const raw = JSON.stringify({
+    book: "John", chapter: 3, verse: 16,
+    bookmarks: [
+      { book: "Matthew", chapter: 6, verse: 13, selectedVerses: [13], label: "Matthew 6:13", preview: "And lead us not..." },
+      { book: "FakeBook", chapter: 1, verse: 1 },
+      { book: "John", chapter: 999, verse: 1 },
+      { book: "Romans", chapter: 8, verse: 28, selectedVerses: [28, 29, 30], label: "Romans 8:28-30", preview: "And we know..." }
+    ]
+  });
+  const res = M.parseState(raw, bible);
+  return res.bookmarks.length === 2 &&
+         res.bookmarks[0].label === "Matthew 6:13" &&
+         res.bookmarks[1].label === "Romans 8:28-30";
+})());
+
+ok("serializeState includes bookmarks array", (() => {
+  const bms = [{ book: "John", chapter: 3, verse: 16, selectedVerses: [16], label: "John 3:16", preview: "For God so loved..." }];
+  const json = M.serializeState("John", 3, 16, "numbered", "normal", bms);
+  const parsed = JSON.parse(json);
+  return Array.isArray(parsed.bookmarks) && parsed.bookmarks.length === 1 && parsed.bookmarks[0].book === "John";
+})());
+
 console.log(fail === 0 ? `\n${pass} passed` : `\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

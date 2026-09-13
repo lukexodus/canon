@@ -144,6 +144,7 @@ function parseState(json, bible) {
   var verse = Canon.DEFAULT_VERSE
   var copyFormat = DEFAULT_COPY_FORMAT
   var fontSize = DEFAULT_FONT_SIZE
+  var bookmarks = []
   if (data && typeof data === "object") {
     if (typeof data.book === "string" && Canon.bookById(data.book)) book = data.book
     if (typeof data.chapter === "number" && Canon.isValidPlace(book, data.chapter, 1))
@@ -154,12 +155,40 @@ function parseState(json, bible) {
       copyFormat = data.copyFormat
     if (data.fontSize === "compact" || data.fontSize === "normal" || data.fontSize === "large")
       fontSize = data.fontSize
+    if (Array.isArray(data.bookmarks)) {
+      for (var i = 0; i < data.bookmarks.length; i++) {
+        var bm = data.bookmarks[i]
+        if (bm && typeof bm.book === "string" && Canon.bookById(bm.book) && typeof bm.chapter === "number" && Canon.isValidPlace(bm.book, bm.chapter, 1)) {
+          var v = clampVerse(bible, bm.book, bm.chapter, bm.verse || 1)
+          var sv = Array.isArray(bm.selectedVerses) && bm.selectedVerses.length > 0
+            ? bm.selectedVerses.map(function(num) { return clampVerse(bible, bm.book, bm.chapter, num) })
+            : [v]
+          var label = typeof bm.label === "string" && bm.label ? bm.label : Canon.formatRefList(bm.book, bm.chapter, sv, false)
+          var preview = typeof bm.preview === "string" ? bm.preview : ""
+          bookmarks.push({
+            book: bm.book,
+            chapter: bm.chapter,
+            verse: v,
+            selectedVerses: sv,
+            label: label,
+            preview: preview
+          })
+        }
+      }
+    }
   }
   verse = clampVerse(bible, book, chapter, verse)
-  return { book: book, chapter: chapter, verse: verse, copyFormat: copyFormat, fontSize: fontSize }
+  return {
+    book: book,
+    chapter: chapter,
+    verse: verse,
+    copyFormat: copyFormat,
+    fontSize: fontSize,
+    bookmarks: bookmarks
+  }
 }
 
-function serializeState(book, chapter, verse, copyFormat, fontSize) {
+function serializeState(book, chapter, verse, copyFormat, fontSize, bookmarks) {
   return JSON.stringify({
     version: STATE_VERSION,
     translation: "BSB",
@@ -167,8 +196,33 @@ function serializeState(book, chapter, verse, copyFormat, fontSize) {
     chapter: chapter,
     verse: verse,
     copyFormat: copyFormat || DEFAULT_COPY_FORMAT,
-    fontSize: fontSize || DEFAULT_FONT_SIZE
+    fontSize: fontSize || DEFAULT_FONT_SIZE,
+    bookmarks: Array.isArray(bookmarks) ? bookmarks : []
   })
+}
+
+function findBookmarkIndex(bookmarks, bookId, chapter, verse, selectedVerses) {
+  if (!Array.isArray(bookmarks)) return -1
+  var isMulti = Array.isArray(selectedVerses) && selectedVerses.length > 1
+  for (var i = 0; i < bookmarks.length; i++) {
+    var b = bookmarks[i]
+    if (b.book !== bookId || b.chapter !== chapter) continue
+    var bMulti = Array.isArray(b.selectedVerses) && b.selectedVerses.length > 1
+    if (isMulti || bMulti) {
+      var listA = isMulti ? selectedVerses : [verse || 1]
+      var listB = bMulti ? b.selectedVerses : [b.verse || 1]
+      if (listA.length === listB.length) {
+        var match = true
+        for (var k = 0; k < listA.length; k++) {
+          if (listA[k] !== listB[k]) { match = false; break }
+        }
+        if (match) return i
+      }
+    } else {
+      if ((b.verse || 1) === (verse || 1)) return i
+    }
+  }
+  return -1
 }
 
 function pushHistory(history, index, entry, limit) {

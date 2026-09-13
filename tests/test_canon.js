@@ -233,5 +233,46 @@ ok("resolveReference valid range", (() => {
   return p && p.book === "Matthew" && p.chapter === 6 && p.verse === 9 && p.endVerse === 13;
 })());
 
+// Navigation history tests
+ok("pushHistory initializes first entry at index 0", (() => {
+  const res = M.pushHistory([], -1, { book: "Genesis", chapter: 1, verse: 1 });
+  return res.history.length === 1 && res.index === 0 && res.history[0].book === "Genesis";
+})());
+
+ok("pushHistory appends new locations", (() => {
+  let s = M.pushHistory([], -1, { book: "Genesis", chapter: 1, verse: 1 });
+  s = M.pushHistory(s.history, s.index, { book: "Matthew", chapter: 6, verse: 13, selectedVerses: [13] });
+  return s.history.length === 2 && s.index === 1 && s.history[1].book === "Matthew";
+})());
+
+ok("pushHistory avoids duplicate entries for same book and chapter", (() => {
+  let s = M.pushHistory([], -1, { book: "Matthew", chapter: 6, verse: 9 });
+  s = M.pushHistory(s.history, s.index, { book: "Matthew", chapter: 6, verse: 13, selectedVerses: [13] });
+  return s.history.length === 1 && s.index === 0 && s.history[0].verse === 13;
+})());
+
+ok("updateCurrentHistory modifies verse in active entry", (() => {
+  let s = M.pushHistory([], -1, { book: "Romans", chapter: 8, verse: 1 });
+  const updated = M.updateCurrentHistory(s.history, s.index, 28, [28, 29, 30]);
+  return updated[0].verse === 28 && updated[0].selectedVerses.length === 3;
+})());
+
+ok("pushHistory truncates forward history on branch", (() => {
+  let s = M.pushHistory([], -1, { book: "Genesis", chapter: 1, verse: 1 });
+  s = M.pushHistory(s.history, s.index, { book: "Matthew", chapter: 6, verse: 13 });
+  s = M.pushHistory(s.history, s.index, { book: "John", chapter: 3, verse: 16 });
+  // Go back to index 1 (Matthew)
+  s = M.pushHistory(s.history, 1, { book: "Romans", chapter: 8, verse: 28 });
+  return s.history.length === 3 && s.index === 2 && s.history[2].book === "Romans";
+})());
+
+ok("pushHistory caps at limit", (() => {
+  let s = M.pushHistory([], -1, { book: "Genesis", chapter: 1, verse: 1 }, 3);
+  s = M.pushHistory(s.history, s.index, { book: "Exodus", chapter: 1, verse: 1 }, 3);
+  s = M.pushHistory(s.history, s.index, { book: "Leviticus", chapter: 1, verse: 1 }, 3);
+  s = M.pushHistory(s.history, s.index, { book: "Numbers", chapter: 1, verse: 1 }, 3);
+  return s.history.length === 3 && s.history[0].book === "Exodus" && s.index === 2;
+})());
+
 console.log(fail === 0 ? `\n${pass} passed` : `\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

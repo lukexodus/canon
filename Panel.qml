@@ -31,6 +31,62 @@ Panel {
   property string browseTestament: "ot"
   property bool stateReady: false
 
+  property var navHistory: []
+  property int navIndex: -1
+  property bool _isNavigatingHistory: false
+
+  readonly property bool canGoBack: navIndex > 0
+  readonly property bool canGoForward: navIndex >= 0 && navIndex < (navHistory ? navHistory.length - 1 : 0)
+
+  readonly property string historyBackLabel: {
+    if (!root.canGoBack || !root.navHistory || !root.navHistory[root.navIndex - 1]) return ""
+    var prev = root.navHistory[root.navIndex - 1]
+    return Canon.formatRefList(prev.book, prev.chapter, prev.selectedVerses, false)
+  }
+
+  readonly property string historyForwardLabel: {
+    if (!root.canGoForward || !root.navHistory || !root.navHistory[root.navIndex + 1]) return ""
+    var next = root.navHistory[root.navIndex + 1]
+    return Canon.formatRefList(next.book, next.chapter, next.selectedVerses, false)
+  }
+
+  function pushHistory(bookId, chapter, verse, selectedVerses) {
+    if (root._isNavigatingHistory) return
+    var res = Model.pushHistory(root.navHistory, root.navIndex, {
+      book: bookId,
+      chapter: chapter,
+      verse: verse,
+      selectedVerses: selectedVerses
+    }, 50)
+    root.navHistory = res.history
+    root.navIndex = res.index
+  }
+
+  function updateCurrentHistoryEntry() {
+    if (root._isNavigatingHistory || root.navIndex < 0) return
+    root.navHistory = Model.updateCurrentHistory(root.navHistory, root.navIndex, root.verse, root.selectedVerses)
+  }
+
+  function goBack() {
+    if (!root.canGoBack) return false
+    root._isNavigatingHistory = true
+    root.navIndex--
+    var entry = root.navHistory[root.navIndex]
+    root.applyPlace(entry.book, entry.chapter, entry.verse, true, null, entry.selectedVerses)
+    root._isNavigatingHistory = false
+    return true
+  }
+
+  function goForward() {
+    if (!root.canGoForward) return false
+    root._isNavigatingHistory = true
+    root.navIndex++
+    var entry = root.navHistory[root.navIndex]
+    root.applyPlace(entry.book, entry.chapter, entry.verse, true, null, entry.selectedVerses)
+    root._isNavigatingHistory = false
+    return true
+  }
+
   function isVerseSelected(n) {
     return root.selectedVerses && root.selectedVerses.indexOf(n) !== -1
   }
@@ -40,6 +96,7 @@ Panel {
     root.selectedVerses = [v]
     root.selectionAnchor = v
     root.verse = v
+    root.updateCurrentHistoryEntry()
   }
 
   function toggleVerse(n) {
@@ -58,6 +115,7 @@ Panel {
     }
     root.selectedVerses = list
     root.selectionAnchor = v
+    root.updateCurrentHistoryEntry()
   }
 
   function selectRange(n) {
@@ -69,6 +127,7 @@ Panel {
     for (var i = s; i <= e; i++) list.push(i)
     root.selectedVerses = list
     root.verse = target
+    root.updateCurrentHistoryEntry()
   }
 
   onSettingsChanged: {
@@ -137,13 +196,23 @@ Panel {
     stateFile.setText(Model.serializeState(root.book, root.chapter, root.verse, root.copyFormat))
   }
 
-  function applyPlace(bookId, chapter, verse, persistNow, endVerse) {
+  function applyPlace(bookId, chapter, verse, persistNow, endVerse, selectedVersesList) {
     if (!Canon.isValidPlace(bookId, chapter, 1)) return false
     root.book = bookId
     root.chapter = chapter
     var startV = Model.clampVerse(root.bible, bookId, chapter, verse || 1)
     root.verse = startV
-    if (typeof endVerse === "number" && endVerse >= 1 && endVerse !== startV) {
+    if (Array.isArray(selectedVersesList) && selectedVersesList.length > 0) {
+      var validList = []
+      for (var k = 0; k < selectedVersesList.length; k++) {
+        var cv = Model.clampVerse(root.bible, bookId, chapter, selectedVersesList[k])
+        if (validList.indexOf(cv) === -1) validList.push(cv)
+      }
+      validList.sort(function(a, b) { return a - b })
+      root.selectedVerses = validList
+      root.selectionAnchor = validList[0] || startV
+      root.verse = startV
+    } else if (typeof endVerse === "number" && endVerse >= 1 && endVerse !== startV) {
       var endV = Model.clampVerse(root.bible, bookId, chapter, endVerse)
       var s = Math.min(startV, endV)
       var e = Math.max(startV, endV)
@@ -158,6 +227,9 @@ Panel {
     }
     root.searchError = ""
     root.browseMode = "read"
+    if (!root._isNavigatingHistory) {
+      root.pushHistory(root.book, root.chapter, root.verse, root.selectedVerses)
+    }
     if (persistNow !== false) root.persist()
     Qt.callLater(root.scrollToVerse)
     return true
@@ -306,6 +378,18 @@ Panel {
       anchors.fill: parent
       blocked: searchField.activeFocus
       Keys.onPressed: function(event) {
+        if ((event.modifiers & Qt.AltModifier) && event.key === Qt.Key_Left) {
+          if (root.goBack()) {
+            event.accepted = true
+            return
+          }
+        }
+        if ((event.modifiers & Qt.AltModifier) && event.key === Qt.Key_Right) {
+          if (root.goForward()) {
+            event.accepted = true
+            return
+          }
+        }
         if ((event.modifiers & Qt.ControlModifier) && (event.key === Qt.Key_C || event.key === Qt.Key_Insert)) {
           root.copySelection()
           event.accepted = true
@@ -375,6 +459,38 @@ Panel {
             spacing: Style.space(6)
 
             Button {
+              id: backBtn
+              width: Style.space(28)
+              implicitHeight: Style.space(28)
+              horizontalPadding: 0
+              verticalPadding: 0
+              iconText: "󰌍"
+              foreground: root.canGoBack ? contentForeground : mutedForeground
+              opacity: root.canGoBack ? 1.0 : 0.35
+              enabled: root.canGoBack
+              tooltipText: root.canGoBack
+                ? (root.historyBackLabel ? "Back to " + root.historyBackLabel + " (Alt+Left)" : "Back (Alt+Left)")
+                : "Back (Alt+Left)"
+              onClicked: root.goBack()
+            }
+
+            Button {
+              id: fwdBtn
+              width: Style.space(28)
+              implicitHeight: Style.space(28)
+              horizontalPadding: 0
+              verticalPadding: 0
+              iconText: "󰌎"
+              foreground: root.canGoForward ? contentForeground : mutedForeground
+              opacity: root.canGoForward ? 1.0 : 0.35
+              enabled: root.canGoForward
+              tooltipText: root.canGoForward
+                ? (root.historyForwardLabel ? "Forward to " + root.historyForwardLabel + " (Alt+Right)" : "Forward (Alt+Right)")
+                : "Forward (Alt+Right)"
+              onClicked: root.goForward()
+            }
+
+            Button {
               id: prevBtn
               width: Style.space(28)
               implicitHeight: Style.space(28)
@@ -388,9 +504,9 @@ Panel {
 
             Column {
               id: titleCol
-              width: headerRow.width
-                - (prevBtn.width + nextBtn.width + copyBtn.width + booksBtn.width + settingsBtn.width)
-                - (headerRow.spacing * 5)
+              width: Math.max(Style.space(70), headerRow.width
+                - (backBtn.width + fwdBtn.width + prevBtn.width + nextBtn.width + copyBtn.width + booksBtn.width + settingsBtn.width)
+                - (headerRow.spacing * 7))
               spacing: Style.space(2)
               anchors.verticalCenter: parent.verticalCenter
 
@@ -492,6 +608,18 @@ Panel {
             if (event.key === Qt.Key_Escape) {
               event.accepted = true
               root.close()
+            } else if ((event.modifiers & Qt.AltModifier) && event.key === Qt.Key_Left) {
+              if (root.goBack()) {
+                event.accepted = true
+                searchField.focus = false
+                keyCatcher.forceActiveFocus()
+              }
+            } else if ((event.modifiers & Qt.AltModifier) && event.key === Qt.Key_Right) {
+              if (root.goForward()) {
+                event.accepted = true
+                searchField.focus = false
+                keyCatcher.forceActiveFocus()
+              }
             }
           }
         }

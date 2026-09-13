@@ -91,6 +91,18 @@ BarWidget {
     function show(): void { root.open() }
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
+    function back(): string {
+      if (panelLoader.item) {
+        return panelLoader.item.goBack() ? "ok" : "empty"
+      }
+      return "empty"
+    }
+    function forward(): string {
+      if (panelLoader.item) {
+        return panelLoader.item.goForward() ? "ok" : "empty"
+      }
+      return "empty"
+    }
   }
 
   WidgetButton {

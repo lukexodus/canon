@@ -165,3 +165,41 @@ function serializeState(book, chapter, verse, copyFormat) {
     copyFormat: copyFormat || DEFAULT_COPY_FORMAT
   })
 }
+
+function pushHistory(history, index, entry, limit) {
+  var max = limit || 50
+  var hist = history ? history.slice(0, index + 1) : []
+  var item = {
+    book: entry.book,
+    chapter: entry.chapter,
+    verse: entry.verse || 1,
+    selectedVerses: Array.isArray(entry.selectedVerses) && entry.selectedVerses.length > 0
+      ? entry.selectedVerses.slice()
+      : [entry.verse || 1]
+  }
+  if (hist.length > 0) {
+    var last = hist[hist.length - 1]
+    if (last.book === item.book && last.chapter === item.chapter) {
+      last.verse = item.verse
+      last.selectedVerses = item.selectedVerses
+      return { history: hist, index: hist.length - 1 }
+    }
+  }
+  hist.push(item)
+  var newIdx = hist.length - 1
+  if (hist.length > max) {
+    hist.shift()
+    newIdx--
+  }
+  return { history: hist, index: newIdx }
+}
+
+function updateCurrentHistory(history, index, verse, selectedVerses) {
+  if (!history || index < 0 || index >= history.length) return history
+  var hist = history.slice()
+  var cur = Object.assign({}, hist[index])
+  cur.verse = verse
+  cur.selectedVerses = Array.isArray(selectedVerses) && selectedVerses.length > 0 ? selectedVerses.slice() : [verse]
+  hist[index] = cur
+  return hist
+}

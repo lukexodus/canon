@@ -56,6 +56,15 @@ function resolveReference(input, bible) {
   if (!place) return null
   var count = verseCount(bible, place.book, place.chapter)
   if (count <= 0 || place.verse > count) return null
+  if (typeof place.endVerse === "number") {
+    place.endVerse = clampVerse(bible, place.book, place.chapter, place.endVerse)
+    var s = Math.min(place.verse, place.endVerse)
+    var e = Math.max(place.verse, place.endVerse)
+    place.verse = s
+    place.endVerse = e
+  } else {
+    place.endVerse = place.verse
+  }
   return place
 }
 

@@ -260,27 +260,38 @@ function formatRefList(bookId, chapter, verseList, compact) {
 function parseReference(input) {
   var raw = String(input || "").trim()
   if (!raw) return null
-  raw = _ordinalPrefix(raw).replace(/[.]+/g, " ")
-  var m = raw.match(/^(.+?)\s+(\d+)(?:\s*[:.]\s*(\d+))?$/)
+
+  // Normalize en-dash (\u2013) and em-dash (\u2014) to standard hyphen
+  raw = raw.replace(/[\u2013\u2014]/g, "-")
+  // Replace dots after letters (abbreviations like "Matt." or "1 Cor.") with space
+  raw = raw.replace(/([a-zA-Z])\./g, "$1 ")
+  raw = _ordinalPrefix(raw)
+
   var bookPart = raw
   var chapter = 1
   var verse = 1
+  var endVerse = 1
+
+  // Match e.g.:
+  // "John 3:16-18", "John 3:16 - 18", "John 3:16", "John 3", "Jude 4-6", "1 Cor 13:4-7", "jn3:16-18"
+  var m = raw.match(/^(.+?)\s*(\d+)(?:(?:\s*[:.]\s*(\d+)(?:\s*-\s*(\d+))?)|(?:\s*-\s*(\d+)))?$/)
   if (m) {
-    bookPart = m[1]
+    bookPart = m[1].trim()
     chapter = parseInt(m[2], 10)
     verse = m[3] ? parseInt(m[3], 10) : 1
-  } else {
-    var glued = raw.match(/^(.+?)(\d+)$/)
-    if (glued) {
-      bookPart = glued[1]
-      chapter = parseInt(glued[2], 10)
-    }
+    endVerse = m[4] ? parseInt(m[4], 10) : (m[5] ? parseInt(m[5], 10) : (m[3] ? parseInt(m[3], 10) : 1))
   }
+
   _ensureIndexes()
   var id = _aliasMap[_collapse(bookPart)]
   if (!id) return null
+
   if (!isValidPlace(id, chapter, verse)) return null
-  return { book: id, chapter: chapter, verse: verse }
+
+  var s = Math.min(verse, endVerse)
+  var e = Math.max(verse, endVerse)
+
+  return { book: id, chapter: chapter, verse: s, endVerse: e }
 }
 
 function bookSelectionPlace(bookId) {

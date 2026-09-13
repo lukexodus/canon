@@ -83,8 +83,12 @@ Panel {
   readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
 
   readonly property var currentVerses: Model.versesFor(root.bible, root.book, root.chapter)
-  readonly property string label: Canon.formatRef(root.book, root.chapter, root.verse, true)
-  readonly property string tooltipLabel: Canon.formatRef(root.book, root.chapter, root.verse, false) + " · BSB"
+  readonly property string label: root.hasMultiSelection
+    ? Canon.formatRefList(root.book, root.chapter, root.selectedVerses, true)
+    : Canon.formatRef(root.book, root.chapter, root.verse, true)
+  readonly property string tooltipLabel: (root.hasMultiSelection
+    ? Canon.formatRefList(root.book, root.chapter, root.selectedVerses, false)
+    : Canon.formatRef(root.book, root.chapter, root.verse, false)) + " · BSB"
   readonly property var otBooks: Canon.booksForTestament("ot")
   readonly property var ntBooks: Canon.booksForTestament("nt")
   readonly property var browseBooks: root.browseTestament === "nt" ? root.ntBooks : root.otBooks
@@ -133,13 +137,25 @@ Panel {
     stateFile.setText(Model.serializeState(root.book, root.chapter, root.verse, root.copyFormat))
   }
 
-  function applyPlace(bookId, chapter, verse, persistNow) {
+  function applyPlace(bookId, chapter, verse, persistNow, endVerse) {
     if (!Canon.isValidPlace(bookId, chapter, 1)) return false
     root.book = bookId
     root.chapter = chapter
-    root.verse = Model.clampVerse(root.bible, bookId, chapter, verse || 1)
-    root.selectedVerses = [root.verse]
-    root.selectionAnchor = root.verse
+    var startV = Model.clampVerse(root.bible, bookId, chapter, verse || 1)
+    root.verse = startV
+    if (typeof endVerse === "number" && endVerse >= 1 && endVerse !== startV) {
+      var endV = Model.clampVerse(root.bible, bookId, chapter, endVerse)
+      var s = Math.min(startV, endV)
+      var e = Math.max(startV, endV)
+      var list = []
+      for (var i = s; i <= e; i++) list.push(i)
+      root.selectedVerses = list
+      root.selectionAnchor = s
+      root.verse = s
+    } else {
+      root.selectedVerses = [startV]
+      root.selectionAnchor = startV
+    }
     root.searchError = ""
     root.browseMode = "read"
     if (persistNow !== false) root.persist()
@@ -160,10 +176,13 @@ Panel {
       root.searchError = "Not a known reference"
       return
     }
-    if (!root.applyPlace(parsed.book, parsed.chapter, parsed.verse, true))
+    if (!root.applyPlace(parsed.book, parsed.chapter, parsed.verse, true, parsed.endVerse)) {
       root.searchError = "Not a known reference"
-    else
+    } else {
       root.searchText = ""
+      searchField.focus = false
+      keyCatcher.forceActiveFocus()
+    }
   }
 
   function scrollToVerse() {

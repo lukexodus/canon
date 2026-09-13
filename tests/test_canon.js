@@ -177,5 +177,61 @@ ok("single verse via array has no verse number in body",
   nonContigSingle.endsWith('"\n— Matthew 6:13')
 );
 
+// Reference range parsing tests
+ok("parseReference range John 3:16-18", (() => {
+  const p = C.parseReference("John 3:16-18");
+  return p && p.book === "John" && p.chapter === 3 && p.verse === 16 && p.endVerse === 18;
+})());
+
+ok("parseReference range Matt 6:9-13", (() => {
+  const p = C.parseReference("Matt 6:9-13");
+  return p && p.book === "Matthew" && p.chapter === 6 && p.verse === 9 && p.endVerse === 13;
+})());
+
+ok("parseReference range with dot abbreviation Matt. 6:9-13", (() => {
+  const p = C.parseReference("Matt. 6:9-13");
+  return p && p.book === "Matthew" && p.chapter === 6 && p.verse === 9 && p.endVerse === 13;
+})());
+
+ok("parseReference range 1 Cor 13:4-7", (() => {
+  const p = C.parseReference("1 Cor 13:4-7");
+  return p && p.book === "1 Corinthians" && p.chapter === 13 && p.verse === 4 && p.endVerse === 7;
+})());
+
+ok("parseReference range with spaces Romans 8:28 - 30", (() => {
+  const p = C.parseReference("Romans 8:28 - 30");
+  return p && p.book === "Romans" && p.chapter === 8 && p.verse === 28 && p.endVerse === 30;
+})());
+
+ok("parseReference range with en-dash John 3:16–18", (() => {
+  const p = C.parseReference("John 3:16\u201318");
+  return p && p.book === "John" && p.chapter === 3 && p.verse === 16 && p.endVerse === 18;
+})());
+
+ok("parseReference range with em-dash John 3:16—18", (() => {
+  const p = C.parseReference("John 3:16\u201418");
+  return p && p.book === "John" && p.chapter === 3 && p.verse === 16 && p.endVerse === 18;
+})());
+
+ok("parseReference reversed range normalized John 3:18-16", (() => {
+  const p = C.parseReference("John 3:18-16");
+  return p && p.book === "John" && p.chapter === 3 && p.verse === 16 && p.endVerse === 18;
+})());
+
+ok("parseReference single verse sets endVerse equal to verse", (() => {
+  const p = C.parseReference("John 3:16");
+  return p && p.book === "John" && p.chapter === 3 && p.verse === 16 && p.endVerse === 16;
+})());
+
+ok("resolveReference clamps range exceeding chapter", (() => {
+  const p = M.resolveReference("John 3:16-999", bible);
+  return p && p.book === "John" && p.chapter === 3 && p.verse === 16 && p.endVerse === 36;
+})());
+
+ok("resolveReference valid range", (() => {
+  const p = M.resolveReference("Matt 6:9-13", bible);
+  return p && p.book === "Matthew" && p.chapter === 6 && p.verse === 9 && p.endVerse === 13;
+})());
+
 console.log(fail === 0 ? `\n${pass} passed` : `\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

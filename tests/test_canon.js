@@ -104,10 +104,23 @@ ok("custom copyFormat state is restored", (() => {
   const p = M.parseState('{"book":"John","chapter":3,"verse":16,"copyFormat":"paragraph"}', bible);
   return p.copyFormat === "paragraph";
 })());
-ok("state serialization includes copyFormat", (() => {
-  const s = M.serializeState("Romans", 8, 28, "lines");
+ok("default fontSize is normal", M.DEFAULT_FONT_SIZE === "normal");
+ok("custom fontSize state compact is restored", (() => {
+  const p = M.parseState('{"book":"John","chapter":3,"verse":16,"fontSize":"compact"}', bible);
+  return p.fontSize === "compact";
+})());
+ok("custom fontSize state large is restored", (() => {
+  const p = M.parseState('{"book":"John","chapter":3,"verse":16,"fontSize":"large"}', bible);
+  return p.fontSize === "large";
+})());
+ok("invalid fontSize falls back to normal", (() => {
+  const p = M.parseState('{"book":"John","chapter":3,"verse":16,"fontSize":"huge"}', bible);
+  return p.fontSize === "normal";
+})());
+ok("state serialization includes copyFormat and fontSize", (() => {
+  const s = M.serializeState("Romans", 8, 28, "lines", "large");
   const p = JSON.parse(s);
-  return p.book === "Romans" && p.chapter === 8 && p.verse === 28 && p.copyFormat === "lines";
+  return p.book === "Romans" && p.chapter === 8 && p.verse === 28 && p.copyFormat === "lines" && p.fontSize === "large";
 })());
 
 ok("formatRefRange single verse", C.formatRefRange("Matthew", 6, 13, 13) === "Matthew 6:13");

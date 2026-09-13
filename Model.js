@@ -5,6 +5,7 @@
 var STATE_VERSION = 1
 var OMITTED_VERSE_TEXT = "Not included in this translation."
 var DEFAULT_COPY_FORMAT = "numbered"
+var DEFAULT_FONT_SIZE = "normal"
 
 function fileUrlToPath(url) {
   var s = String(url || "")
@@ -142,6 +143,7 @@ function parseState(json, bible) {
   var chapter = Canon.DEFAULT_CHAPTER
   var verse = Canon.DEFAULT_VERSE
   var copyFormat = DEFAULT_COPY_FORMAT
+  var fontSize = DEFAULT_FONT_SIZE
   if (data && typeof data === "object") {
     if (typeof data.book === "string" && Canon.bookById(data.book)) book = data.book
     if (typeof data.chapter === "number" && Canon.isValidPlace(book, data.chapter, 1))
@@ -150,19 +152,22 @@ function parseState(json, bible) {
       verse = data.verse
     if (data.copyFormat === "numbered" || data.copyFormat === "paragraph" || data.copyFormat === "lines")
       copyFormat = data.copyFormat
+    if (data.fontSize === "compact" || data.fontSize === "normal" || data.fontSize === "large")
+      fontSize = data.fontSize
   }
   verse = clampVerse(bible, book, chapter, verse)
-  return { book: book, chapter: chapter, verse: verse, copyFormat: copyFormat }
+  return { book: book, chapter: chapter, verse: verse, copyFormat: copyFormat, fontSize: fontSize }
 }
 
-function serializeState(book, chapter, verse, copyFormat) {
+function serializeState(book, chapter, verse, copyFormat, fontSize) {
   return JSON.stringify({
     version: STATE_VERSION,
     translation: "BSB",
     book: book,
     chapter: chapter,
     verse: verse,
-    copyFormat: copyFormat || DEFAULT_COPY_FORMAT
+    copyFormat: copyFormat || DEFAULT_COPY_FORMAT,
+    fontSize: fontSize || DEFAULT_FONT_SIZE
   })
 }
 

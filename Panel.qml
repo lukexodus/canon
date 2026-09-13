@@ -24,6 +24,12 @@ Panel {
   property int selectionAnchor: root.verse
   readonly property bool hasMultiSelection: selectedVerses && selectedVerses.length > 1
   property string copyFormat: Model.DEFAULT_COPY_FORMAT
+  property string fontSizeSetting: Model.DEFAULT_FONT_SIZE
+  readonly property real versePixelSize: {
+    if (fontSizeSetting === "compact") return Style.font.caption
+    if (fontSizeSetting === "large") return Style.font.body
+    return Style.font.bodySmall
+  }
   property string copyNotice: ""
   property string searchText: ""
   property string searchError: ""
@@ -134,6 +140,9 @@ Panel {
     if (root.settings && typeof root.settings.copyFormat === "string") {
       root.copyFormat = root.settings.copyFormat
     }
+    if (root.settings && typeof root.settings.fontSize === "string") {
+      root.fontSizeSetting = root.settings.fontSize
+    }
   }
 
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
@@ -193,7 +202,7 @@ Panel {
 
   function persist() {
     if (!root.stateReady) return
-    stateFile.setText(Model.serializeState(root.book, root.chapter, root.verse, root.copyFormat))
+    stateFile.setText(Model.serializeState(root.book, root.chapter, root.verse, root.copyFormat, root.fontSizeSetting))
   }
 
   function applyPlace(bookId, chapter, verse, persistNow, endVerse, selectedVersesList) {
@@ -348,6 +357,11 @@ Panel {
       } else {
         root.copyFormat = place.copyFormat || Model.DEFAULT_COPY_FORMAT
       }
+      if (root.settings && typeof root.settings.fontSize === "string") {
+        root.fontSizeSetting = root.settings.fontSize
+      } else {
+        root.fontSizeSetting = place.fontSize || Model.DEFAULT_FONT_SIZE
+      }
       root.applyPlace(place.book, place.chapter, place.verse, false)
       root.stateReady = true
     }
@@ -356,6 +370,11 @@ Panel {
         root.copyFormat = root.settings.copyFormat
       } else {
         root.copyFormat = Model.DEFAULT_COPY_FORMAT
+      }
+      if (root.settings && typeof root.settings.fontSize === "string") {
+        root.fontSizeSetting = root.settings.fontSize
+      } else {
+        root.fontSizeSetting = Model.DEFAULT_FONT_SIZE
       }
       root.applyPlace(Canon.DEFAULT_BOOK, Canon.DEFAULT_CHAPTER, Canon.DEFAULT_VERSE, false)
       root.stateReady = true
@@ -675,7 +694,7 @@ Panel {
                 color: isSelected ? root.accentColor : (modelData.omitted ? mutedForeground : contentForeground)
                 font.italic: modelData.omitted
                 font.family: contentFontFamily
-                font.pixelSize: Style.font.bodySmall
+                font.pixelSize: root.versePixelSize
                 wrapMode: Text.WordWrap
               }
 
@@ -820,90 +839,163 @@ Panel {
           }
         }
 
-        Column {
+        Flickable {
+          id: settingsFlickable
           width: parent.width
-          visible: root.browseMode === "settings"
-          spacing: Style.space(12)
           height: verseList.height
+          contentWidth: width
+          contentHeight: settingsCol.implicitHeight + Style.space(16)
+          clip: true
+          boundsBehavior: Flickable.StopAtBounds
+          visible: root.browseMode === "settings"
 
-          Text {
-            text: "Multi-Verse Copy Format"
-            color: contentForeground
-            font.family: contentFontFamily
-            font.pixelSize: Style.font.bodySmall
-            font.bold: true
-          }
-
-          Text {
+          Column {
+            id: settingsCol
             width: parent.width
-            text: "Select how multiple verses in a selection are formatted inside quotation marks:"
-            color: mutedForeground
-            font.family: contentFontFamily
-            font.pixelSize: Style.font.caption
-            wrapMode: Text.WordWrap
-          }
-
-          Row {
-            width: parent.width
-            spacing: Style.space(6)
-
-            Button {
-              width: (parent.width - Style.space(12)) / 3
-              text: "Numbered"
-              selected: root.copyFormat === "numbered"
-              bordered: true
-              foreground: contentForeground
-              onClicked: {
-                root.copyFormat = "numbered"
-                root.persist()
-              }
-            }
-
-            Button {
-              width: (parent.width - Style.space(12)) / 3
-              text: "Paragraph"
-              selected: root.copyFormat === "paragraph"
-              bordered: true
-              foreground: contentForeground
-              onClicked: {
-                root.copyFormat = "paragraph"
-                root.persist()
-              }
-            }
-
-            Button {
-              width: (parent.width - Style.space(12)) / 3
-              text: "Lines"
-              selected: root.copyFormat === "lines"
-              bordered: true
-              foreground: contentForeground
-              onClicked: {
-                root.copyFormat = "lines"
-                root.persist()
-              }
-            }
-          }
-
-          Rectangle {
-            width: parent.width
-            height: Style.space(90)
-            radius: Style.space(4)
-            color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.04)
-            border.width: 1
-            border.color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.12)
+            spacing: Style.space(12)
 
             Text {
-              anchors.fill: parent
-              anchors.margins: Style.space(8)
-              text: root.copyFormat === "numbered"
-                ? "\"⁹ So then, this is how you should pray: ... ¹³ And lead us not into temptation...\"\n— Matthew 6:9-13"
-                : (root.copyFormat === "paragraph"
-                   ? "\"So then, this is how you should pray: ... And lead us not into temptation...\"\n— Matthew 6:9-13"
-                   : "\"⁹ So then, this is how you should pray: ...\n¹⁰ ...\n¹³ And lead us not into temptation...\"\n— Matthew 6:9-13")
+              text: "Reading Font Size"
+              color: contentForeground
+              font.family: contentFontFamily
+              font.pixelSize: Style.font.bodySmall
+              font.bold: true
+            }
+
+            Text {
+              width: parent.width
+              text: "Adjust the text size for reading verses in the reader:"
               color: mutedForeground
               font.family: contentFontFamily
               font.pixelSize: Style.font.caption
               wrapMode: Text.WordWrap
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Button {
+                width: (parent.width - Style.space(12)) / 3
+                text: "Compact"
+                selected: root.fontSizeSetting === "compact"
+                bordered: true
+                foreground: contentForeground
+                onClicked: {
+                  root.fontSizeSetting = "compact"
+                  root.persist()
+                }
+              }
+
+              Button {
+                width: (parent.width - Style.space(12)) / 3
+                text: "Normal"
+                selected: root.fontSizeSetting === "normal"
+                bordered: true
+                foreground: contentForeground
+                onClicked: {
+                  root.fontSizeSetting = "normal"
+                  root.persist()
+                }
+              }
+
+              Button {
+                width: (parent.width - Style.space(12)) / 3
+                text: "Large"
+                selected: root.fontSizeSetting === "large"
+                bordered: true
+                foreground: contentForeground
+                onClicked: {
+                  root.fontSizeSetting = "large"
+                  root.persist()
+                }
+              }
+            }
+
+            Item {
+              width: parent.width
+              height: Style.space(4)
+            }
+
+            Text {
+              text: "Multi-Verse Copy Format"
+              color: contentForeground
+              font.family: contentFontFamily
+              font.pixelSize: Style.font.bodySmall
+              font.bold: true
+            }
+
+            Text {
+              width: parent.width
+              text: "Select how multiple verses in a selection are formatted inside quotation marks:"
+              color: mutedForeground
+              font.family: contentFontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Button {
+                width: (parent.width - Style.space(12)) / 3
+                text: "Numbered"
+                selected: root.copyFormat === "numbered"
+                bordered: true
+                foreground: contentForeground
+                onClicked: {
+                  root.copyFormat = "numbered"
+                  root.persist()
+                }
+              }
+
+              Button {
+                width: (parent.width - Style.space(12)) / 3
+                text: "Paragraph"
+                selected: root.copyFormat === "paragraph"
+                bordered: true
+                foreground: contentForeground
+                onClicked: {
+                  root.copyFormat = "paragraph"
+                  root.persist()
+                }
+              }
+
+              Button {
+                width: (parent.width - Style.space(12)) / 3
+                text: "Lines"
+                selected: root.copyFormat === "lines"
+                bordered: true
+                foreground: contentForeground
+                onClicked: {
+                  root.copyFormat = "lines"
+                  root.persist()
+                }
+              }
+            }
+
+            Rectangle {
+              width: parent.width
+              height: Style.space(90)
+              radius: Style.space(4)
+              color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.04)
+              border.width: 1
+              border.color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.12)
+
+              Text {
+                anchors.fill: parent
+                anchors.margins: Style.space(8)
+                text: root.copyFormat === "numbered"
+                  ? "\"⁹ So then, this is how you should pray: ... ¹³ And lead us not into temptation...\"\n— Matthew 6:9-13"
+                  : (root.copyFormat === "paragraph"
+                     ? "\"So then, this is how you should pray: ... And lead us not into temptation...\"\n— Matthew 6:9-13"
+                     : "\"⁹ So then, this is how you should pray: ...\n¹⁰ ...\n¹³ And lead us not into temptation...\"\n— Matthew 6:9-13")
+                color: mutedForeground
+                font.family: contentFontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+              }
             }
           }
         }

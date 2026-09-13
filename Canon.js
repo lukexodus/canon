@@ -210,6 +210,17 @@ function formatRef(bookId, chapter, verse, compact) {
   return name + " " + chapter + ":" + verse
 }
 
+function formatRefRange(bookId, chapter, startVerse, endVerse, compact) {
+  var book = bookById(bookId)
+  var name = book ? (compact ? book.abbrev : book.name) : (bookId || "")
+  if (!chapter) return name || "Canon"
+  if (!startVerse) return name + " " + chapter
+  if (!endVerse || startVerse === endVerse) return name + " " + chapter + ":" + startVerse
+  var s = Math.min(startVerse, endVerse)
+  var e = Math.max(startVerse, endVerse)
+  return name + " " + chapter + ":" + s + "-" + e
+}
+
 function parseReference(input) {
   var raw = String(input || "").trim()
   if (!raw) return null

@@ -14,16 +14,30 @@ Panel {
   property var anchorItem: null
   property var hostWidget: null
   readonly property var barIdentity: hostWidget || root
+  property var settings: null
 
   property var bible: null
   property string book: Canon.DEFAULT_BOOK
   property int chapter: Canon.DEFAULT_CHAPTER
   property int verse: Canon.DEFAULT_VERSE
+  property int selectionStart: root.verse
+  property int selectionEnd: root.verse
+  readonly property int selMin: Math.min(selectionStart, selectionEnd)
+  readonly property int selMax: Math.max(selectionStart, selectionEnd)
+  readonly property bool hasMultiSelection: selMin !== selMax
+  property string copyFormat: Model.DEFAULT_COPY_FORMAT
+  property string copyNotice: ""
   property string searchText: ""
   property string searchError: ""
-  property string browseMode: "read" // read | books | chapters
+  property string browseMode: "read" // read | books | chapters | settings
   property string browseTestament: "ot"
   property bool stateReady: false
+
+  onSettingsChanged: {
+    if (root.settings && typeof root.settings.copyFormat === "string") {
+      root.copyFormat = root.settings.copyFormat
+    }
+  }
 
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
   readonly property color mutedForeground: Color.muted
@@ -78,7 +92,7 @@ Panel {
 
   function persist() {
     if (!root.stateReady) return
-    stateFile.setText(Model.serializeState(root.book, root.chapter, root.verse))
+    stateFile.setText(Model.serializeState(root.book, root.chapter, root.verse, root.copyFormat))
   }
 
   function applyPlace(bookId, chapter, verse, persistNow) {
@@ -86,6 +100,8 @@ Panel {
     root.book = bookId
     root.chapter = chapter
     root.verse = Model.clampVerse(root.bible, bookId, chapter, verse || 1)
+    root.selectionStart = root.verse
+    root.selectionEnd = root.verse
     root.searchError = ""
     root.browseMode = "read"
     if (persistNow !== false) root.persist()
@@ -116,6 +132,49 @@ Panel {
     if (!verseList.count) return
     var idx = Math.max(0, Math.min(verseList.count - 1, root.verse - 1))
     verseList.positionViewAtIndex(idx, ListView.Contain)
+  }
+
+  function copySelection(startV, endV) {
+    var s = (typeof startV === "number") ? startV : root.selMin
+    var e = (typeof endV === "number") ? endV : root.selMax
+    var text = Model.formatCopiedVerses(root.bible, root.book, root.chapter, s, e, root.copyFormat)
+    if (!text) return false
+
+    try {
+      if (typeof Quickshell !== "undefined") {
+        Quickshell.clipboardText = text
+        Quickshell.execDetached(["wl-copy", "--", text])
+      }
+    } catch (e1) {}
+
+    try {
+      clipboardProxy.text = text
+      clipboardProxy.selectAll()
+      clipboardProxy.copy()
+      clipboardProxy.deselect()
+    } catch (e2) {}
+
+    var ref = Canon.formatRefRange(root.book, root.chapter, s, e, false)
+    root.showCopyNotice("Copied " + ref)
+    return true
+  }
+
+  function showCopyNotice(msg) {
+    root.copyNotice = msg
+    copyNoticeTimer.restart()
+  }
+
+  TextEdit {
+    id: clipboardProxy
+    visible: false
+    readOnly: true
+  }
+
+  Timer {
+    id: copyNoticeTimer
+    interval: 1800
+    repeat: false
+    onTriggered: root.copyNotice = ""
   }
 
   function openBooks(testament) {
@@ -154,10 +213,20 @@ Panel {
     printErrors: false
     onLoaded: {
       var place = Model.parseState(text(), root.bible)
+      if (root.settings && typeof root.settings.copyFormat === "string") {
+        root.copyFormat = root.settings.copyFormat
+      } else {
+        root.copyFormat = place.copyFormat || Model.DEFAULT_COPY_FORMAT
+      }
       root.applyPlace(place.book, place.chapter, place.verse, false)
       root.stateReady = true
     }
     onLoadFailed: {
+      if (root.settings && typeof root.settings.copyFormat === "string") {
+        root.copyFormat = root.settings.copyFormat
+      } else {
+        root.copyFormat = Model.DEFAULT_COPY_FORMAT
+      }
       root.applyPlace(Canon.DEFAULT_BOOK, Canon.DEFAULT_CHAPTER, Canon.DEFAULT_VERSE, false)
       root.stateReady = true
     }
@@ -178,16 +247,63 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       blocked: searchField.activeFocus
+      Keys.onPressed: function(event) {
+        if ((event.modifiers & Qt.ControlModifier) && (event.key === Qt.Key_C || event.key === Qt.Key_Insert)) {
+          root.copySelection()
+          event.accepted = true
+          return
+        }
+        if (event.key === Qt.Key_C || event.key === Qt.Key_Y) {
+          root.copySelection()
+          event.accepted = true
+          return
+        }
+        if (event.modifiers & Qt.ShiftModifier) {
+          if (event.key === Qt.Key_Down || event.text === "J") {
+            root.selectionEnd = Model.clampVerse(root.bible, root.book, root.chapter, root.selectionEnd + 1)
+            root.verse = root.selectionEnd
+            root.scrollToVerse()
+            event.accepted = true
+            return
+          } else if (event.key === Qt.Key_Up || event.text === "K") {
+            root.selectionEnd = Math.max(1, root.selectionEnd - 1)
+            root.verse = root.selectionEnd
+            root.scrollToVerse()
+            event.accepted = true
+            return
+          }
+        }
+      }
       onMoveRequested: function(dx, dy) {
         if (dx !== 0) root.stepChapter(dx)
-        if (dy < 0) root.verse = Math.max(1, root.verse - 1)
-        if (dy > 0) root.verse = Model.clampVerse(root.bible, root.book, root.chapter, root.verse + 1)
+        if (dy < 0) {
+          root.verse = Math.max(1, root.verse - 1)
+          root.selectionStart = root.verse
+          root.selectionEnd = root.verse
+        }
+        if (dy > 0) {
+          root.verse = Model.clampVerse(root.bible, root.book, root.chapter, root.verse + 1)
+          root.selectionStart = root.verse
+          root.selectionEnd = root.verse
+        }
         if (dy !== 0) root.scrollToVerse()
       }
-      onCloseRequested: root.close()
+      onCloseRequested: {
+        if (root.browseMode !== "read") {
+          root.browseMode = "read"
+        } else if (root.hasMultiSelection) {
+          root.selectionEnd = root.selectionStart
+          root.verse = root.selectionStart
+        } else {
+          root.close()
+        }
+      }
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onActivateRequested: {
-        if (root.browseMode === "read") root.persist()
+        if (root.browseMode === "read") {
+          root.copySelection()
+          root.persist()
+        }
       }
 
       Column {
@@ -203,26 +319,33 @@ Panel {
             id: headerRow
             anchors.left: parent.left
             anchors.right: parent.right
-            spacing: Style.space(8)
+            spacing: Style.space(6)
 
             Button {
+              id: prevBtn
               width: Style.space(28)
               implicitHeight: Style.space(28)
               horizontalPadding: 0
               verticalPadding: 0
               iconText: "󰒮"
               foreground: contentForeground
+              tooltipText: "Previous chapter"
               onClicked: root.stepChapter(-1)
             }
 
             Column {
-              width: parent.width - Style.space(120)
+              id: titleCol
+              width: headerRow.width
+                - (prevBtn.width + nextBtn.width + copyBtn.width + booksBtn.width + settingsBtn.width)
+                - (headerRow.spacing * 5)
               spacing: Style.space(2)
               anchors.verticalCenter: parent.verticalCenter
 
               Text {
                 width: parent.width
-                text: Canon.formatRef(root.book, root.chapter, 0, false)
+                text: root.browseMode === "settings"
+                  ? "Settings"
+                  : (root.browseMode === "books" ? "Select Book" : (root.browseMode === "chapters" ? root.book : Canon.formatRef(root.book, root.chapter, 0, false)))
                 color: contentForeground
                 font.family: contentFontFamily
                 font.pixelSize: Style.font.subtitle
@@ -233,7 +356,7 @@ Panel {
 
               Text {
                 width: parent.width
-                text: "BSB"
+                text: root.browseMode === "settings" ? "Canon" : "BSB"
                 color: mutedForeground
                 font.family: contentFontFamily
                 font.pixelSize: Style.font.caption
@@ -242,26 +365,58 @@ Panel {
             }
 
             Button {
+              id: nextBtn
               width: Style.space(28)
               implicitHeight: Style.space(28)
               horizontalPadding: 0
               verticalPadding: 0
               iconText: "󰒭"
               foreground: contentForeground
+              tooltipText: "Next chapter"
               onClicked: root.stepChapter(1)
             }
 
             Button {
+              id: copyBtn
+              width: Style.space(28)
+              implicitHeight: Style.space(28)
+              horizontalPadding: 0
+              verticalPadding: 0
+              iconText: "󰆏"
+              foreground: root.hasMultiSelection ? accentColor : contentForeground
+              tooltipText: root.hasMultiSelection
+                ? "Copy " + Canon.formatRefRange(root.book, root.chapter, root.selMin, root.selMax, false) + " (Ctrl+C)"
+                : "Copy " + Canon.formatRef(root.book, root.chapter, root.verse, false) + " (Ctrl+C)"
+              onClicked: root.copySelection()
+            }
+
+            Button {
+              id: booksBtn
               width: Style.space(28)
               implicitHeight: Style.space(28)
               horizontalPadding: 0
               verticalPadding: 0
               iconText: "󰂻"
-              foreground: root.browseMode === "read" ? mutedForeground : accentColor
+              foreground: (root.browseMode === "books" || root.browseMode === "chapters") ? accentColor : mutedForeground
               tooltipText: "Books"
               onClicked: {
-                if (root.browseMode === "read") root.openBooks(root.currentBookInfo && root.currentBookInfo.testament === "nt" ? "nt" : "ot")
-                else root.browseMode = "read"
+                if (root.browseMode === "books" || root.browseMode === "chapters") root.browseMode = "read"
+                else root.openBooks(root.currentBookInfo && root.currentBookInfo.testament === "nt" ? "nt" : "ot")
+              }
+            }
+
+            Button {
+              id: settingsBtn
+              width: Style.space(28)
+              implicitHeight: Style.space(28)
+              horizontalPadding: 0
+              verticalPadding: 0
+              iconText: "󰒓"
+              foreground: root.browseMode === "settings" ? accentColor : mutedForeground
+              tooltipText: "Settings"
+              onClicked: {
+                if (root.browseMode === "settings") root.browseMode = "read"
+                else root.browseMode = "settings"
               }
             }
           }
@@ -303,32 +458,97 @@ Panel {
           height: parent.height - headerRow.height - searchField.height - browseToggle.height - Style.space(40)
           clip: true
           visible: root.browseMode === "read"
-          spacing: Style.space(8)
+          spacing: Style.space(4)
           boundsBehavior: Flickable.StopAtBounds
           model: root.currentVerses
 
-          delegate: Item {
+          delegate: Rectangle {
+            id: verseRow
             required property var modelData
-            width: verseList.width
-            height: verseText.implicitHeight
+            required property int index
 
-            Text {
-              id: verseText
-              width: parent.width
-              text: modelData.n + "  " + modelData.text
-              color: modelData.n === root.verse ? accentColor : (modelData.omitted ? mutedForeground : contentForeground)
-              font.italic: modelData.omitted
-              font.family: contentFontFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.WordWrap
+            readonly property bool isSelected: modelData.n >= root.selMin && modelData.n <= root.selMax
+            readonly property bool isCurrent: modelData.n === root.verse
+
+            width: verseList.width
+            implicitHeight: rowContent.implicitHeight + Style.space(6)
+            radius: Style.space(4)
+            color: isSelected
+              ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.15)
+              : (verseMouse.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05) : "transparent")
+            border.width: isCurrent ? 1 : 0
+            border.color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.5)
+
+            Row {
+              id: rowContent
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.margins: Style.space(4)
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(4)
+
+              Text {
+                id: verseText
+                width: parent.width - (verseMouse.containsMouse || isSelected ? Style.space(28) : 0)
+                text: modelData.n + "  " + modelData.text
+                color: isSelected ? root.accentColor : (modelData.omitted ? mutedForeground : contentForeground)
+                font.italic: modelData.omitted
+                font.family: contentFontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              Button {
+                width: Style.space(24)
+                implicitHeight: Style.space(24)
+                anchors.verticalCenter: parent.verticalCenter
+                visible: verseMouse.containsMouse || (isSelected && root.hasMultiSelection)
+                horizontalPadding: 0
+                verticalPadding: 0
+                iconText: "󰆏"
+                foreground: isSelected ? root.accentColor : contentForeground
+                tooltipText: isSelected && root.hasMultiSelection
+                  ? "Copy selected verses"
+                  : "Copy verse " + modelData.n
+                onClicked: {
+                  if (isSelected && root.hasMultiSelection) {
+                    root.copySelection()
+                  } else {
+                    root.copySelection(modelData.n, modelData.n)
+                  }
+                }
+              }
             }
 
             MouseArea {
+              id: verseMouse
               anchors.fill: parent
+              hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: {
-                root.verse = modelData.n
-                root.persist()
+              acceptedButtons: Qt.LeftButton | Qt.RightButton
+
+              onClicked: function(mouse) {
+                if (mouse.button === Qt.RightButton) {
+                  if (isSelected && root.hasMultiSelection) {
+                    root.copySelection()
+                  } else {
+                    root.selectionStart = modelData.n
+                    root.selectionEnd = modelData.n
+                    root.verse = modelData.n
+                    root.copySelection(modelData.n, modelData.n)
+                  }
+                  return
+                }
+
+                if (mouse.modifiers & Qt.ShiftModifier) {
+                  root.selectionEnd = modelData.n
+                  root.verse = modelData.n
+                } else {
+                  root.selectionStart = modelData.n
+                  root.selectionEnd = modelData.n
+                  root.verse = modelData.n
+                  root.persist()
+                }
               }
             }
           }
@@ -336,7 +556,7 @@ Panel {
 
         Column {
           width: parent.width
-          visible: root.browseMode !== "read"
+          visible: root.browseMode === "books" || root.browseMode === "chapters"
           spacing: Style.space(8)
           height: verseList.height
 
@@ -422,10 +642,137 @@ Panel {
           }
         }
 
+        Column {
+          width: parent.width
+          visible: root.browseMode === "settings"
+          spacing: Style.space(12)
+          height: verseList.height
+
+          Text {
+            text: "Multi-Verse Copy Format"
+            color: contentForeground
+            font.family: contentFontFamily
+            font.pixelSize: Style.font.bodySmall
+            font.bold: true
+          }
+
+          Text {
+            width: parent.width
+            text: "Select how multiple verses in a selection are formatted inside quotation marks:"
+            color: mutedForeground
+            font.family: contentFontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
+          }
+
+          Row {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Button {
+              width: (parent.width - Style.space(12)) / 3
+              text: "Numbered"
+              selected: root.copyFormat === "numbered"
+              bordered: true
+              foreground: contentForeground
+              onClicked: {
+                root.copyFormat = "numbered"
+                root.persist()
+              }
+            }
+
+            Button {
+              width: (parent.width - Style.space(12)) / 3
+              text: "Paragraph"
+              selected: root.copyFormat === "paragraph"
+              bordered: true
+              foreground: contentForeground
+              onClicked: {
+                root.copyFormat = "paragraph"
+                root.persist()
+              }
+            }
+
+            Button {
+              width: (parent.width - Style.space(12)) / 3
+              text: "Lines"
+              selected: root.copyFormat === "lines"
+              bordered: true
+              foreground: contentForeground
+              onClicked: {
+                root.copyFormat = "lines"
+                root.persist()
+              }
+            }
+          }
+
+          Rectangle {
+            width: parent.width
+            height: Style.space(90)
+            radius: Style.space(4)
+            color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.04)
+            border.width: 1
+            border.color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.12)
+
+            Text {
+              anchors.fill: parent
+              anchors.margins: Style.space(8)
+              text: root.copyFormat === "numbered"
+                ? "\"9 So then, this is how you should pray: ... 13 And lead us not into temptation...\"\n— Matthew 6:9-13"
+                : (root.copyFormat === "paragraph"
+                   ? "\"So then, this is how you should pray: ... And lead us not into temptation...\"\n— Matthew 6:9-13"
+                   : "\"9 So then, this is how you should pray: ...\n10 ...\n13 And lead us not into temptation...\"\n— Matthew 6:9-13")
+              color: mutedForeground
+              font.family: contentFontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
+            }
+          }
+        }
+
         Item {
           id: browseToggle
           width: parent.width
           height: 1
+        }
+      }
+    }
+
+    Rectangle {
+      id: copyNoticePill
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: Style.space(14)
+      z: 1000
+      visible: root.copyNotice !== ""
+      opacity: visible ? 1.0 : 0.0
+      Behavior on opacity { NumberAnimation { duration: 150 } }
+      width: Math.min(parent.width - Style.space(32), noticeRow.implicitWidth + Style.space(20))
+      height: Style.space(30)
+      radius: Style.space(15)
+      color: bar ? bar.background : Color.background
+      border.width: 1
+      border.color: root.accentColor
+
+      Row {
+        id: noticeRow
+        anchors.centerIn: parent
+        spacing: Style.space(6)
+        Text {
+          text: "󰄬"
+          color: root.accentColor
+          font.family: contentFontFamily
+          font.pixelSize: Style.font.caption
+          anchors.verticalCenter: parent.verticalCenter
+        }
+        Text {
+          text: root.copyNotice
+          color: contentForeground
+          font.family: contentFontFamily
+          font.pixelSize: Style.font.caption
+          font.bold: true
+          elide: Text.ElideRight
+          anchors.verticalCenter: parent.verticalCenter
         }
       }
     }

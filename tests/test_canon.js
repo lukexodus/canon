@@ -88,18 +88,69 @@ ok("reader model has no blank rows", bible.books.every((book) =>
 
 ok("valid state is restored", (() => {
   const p = M.parseState('{"book":"John","chapter":3,"verse":16}', bible);
-  return p.book === "John" && p.chapter === 3 && p.verse === 16;
+  return p.book === "John" && p.chapter === 3 && p.verse === 16 && p.copyFormat === "numbered";
 })());
 ok("stale state verse is clamped", M.parseState('{"book":"John","chapter":3,"verse":999}', bible).verse === 36);
 ok("fractional state verse is rejected", M.parseState('{"book":"John","chapter":3,"verse":1.5}', bible).verse === 1);
 ok("malformed state uses defaults", (() => {
   const p = M.parseState('{broken', bible);
-  return p.book === C.DEFAULT_BOOK && p.chapter === C.DEFAULT_CHAPTER && p.verse === C.DEFAULT_VERSE;
+  return p.book === C.DEFAULT_BOOK && p.chapter === C.DEFAULT_CHAPTER && p.verse === C.DEFAULT_VERSE && p.copyFormat === "numbered";
 })());
 ok("invalid state location uses defaults", (() => {
   const p = M.parseState('{"book":"Jude","chapter":119,"verse":4}', bible);
   return p.book === "Jude" && p.chapter === C.DEFAULT_CHAPTER && p.verse === 4;
 })());
+ok("custom copyFormat state is restored", (() => {
+  const p = M.parseState('{"book":"John","chapter":3,"verse":16,"copyFormat":"paragraph"}', bible);
+  return p.copyFormat === "paragraph";
+})());
+ok("state serialization includes copyFormat", (() => {
+  const s = M.serializeState("Romans", 8, 28, "lines");
+  const p = JSON.parse(s);
+  return p.book === "Romans" && p.chapter === 8 && p.verse === 28 && p.copyFormat === "lines";
+})());
+
+ok("formatRefRange single verse", C.formatRefRange("Matthew", 6, 13, 13) === "Matthew 6:13");
+ok("formatRefRange range with hyphen", C.formatRefRange("Matthew", 6, 9, 13) === "Matthew 6:9-13");
+ok("formatRefRange reversed range with hyphen", C.formatRefRange("Matthew", 6, 13, 9) === "Matthew 6:9-13");
+ok("formatRefRange compact", C.formatRefRange("Matthew", 6, 9, 13, true) === "Matt 6:9-13");
+
+const singleCopied = M.formatCopiedVerses(bible, "Matthew", 6, 13, 13);
+ok("single verse copy format has quotes and em-dash",
+  singleCopied.startsWith('"') &&
+  singleCopied.includes('"\n— Matthew 6:13') &&
+  singleCopied.includes("deliver us from the evil one") &&
+  !singleCopied.startsWith('"13 ')
+);
+
+const rangeCopiedNumbered = M.formatCopiedVerses(bible, "Matthew", 6, 9, 13, "numbered");
+ok("range verse copy format numbered default",
+  rangeCopiedNumbered.startsWith('"9 So then, this is how you should pray') &&
+  rangeCopiedNumbered.includes(' 13 And lead us not into temptation') &&
+  rangeCopiedNumbered.endsWith('"\n— Matthew 6:9-13')
+);
+
+const rangeCopiedParagraph = M.formatCopiedVerses(bible, "Matthew", 6, 9, 13, "paragraph");
+ok("range verse copy format paragraph",
+  rangeCopiedParagraph.startsWith('"So then, this is how you should pray') &&
+  !rangeCopiedParagraph.includes('"9 ') &&
+  rangeCopiedParagraph.endsWith('"\n— Matthew 6:9-13')
+);
+
+const rangeCopiedLines = M.formatCopiedVerses(bible, "Matthew", 6, 9, 13, "lines");
+ok("range verse copy format lines",
+  rangeCopiedLines.includes('\n10 ') &&
+  rangeCopiedLines.includes('\n13 ') &&
+  rangeCopiedLines.endsWith('"\n— Matthew 6:9-13')
+);
+
+const omittedRangeCopied = M.formatCopiedVerses(bible, "John", 5, 3, 5, "numbered");
+ok("omitted verse in range is skipped in body",
+  omittedRangeCopied.includes('"3 ') &&
+  !omittedRangeCopied.includes(' 4 ') &&
+  omittedRangeCopied.includes(' 5 ') &&
+  omittedRangeCopied.endsWith('"\n— John 5:3-5')
+);
 
 console.log(fail === 0 ? `\n${pass} passed` : `\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

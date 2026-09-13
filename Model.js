@@ -4,6 +4,7 @@
 
 var STATE_VERSION = 1
 var OMITTED_VERSE_TEXT = "Not included in this translation."
+var DEFAULT_COPY_FORMAT = "numbered"
 
 function fileUrlToPath(url) {
   var s = String(url || "")
@@ -58,29 +59,69 @@ function resolveReference(input, bible) {
   return place
 }
 
+function formatCopiedVerses(bible, bookId, chapter, startVerse, endVerse, copyFormat) {
+  var verses = versesFor(bible, bookId, chapter)
+  if (!verses || verses.length === 0) return ""
+  var count = verses.length
+  var s = typeof startVerse === "number" && Math.floor(startVerse) === startVerse ? startVerse : 1
+  var e = typeof endVerse === "number" && Math.floor(endVerse) === endVerse ? endVerse : s
+  var minV = Math.max(1, Math.min(Math.min(s, e), count))
+  var maxV = Math.max(1, Math.min(Math.max(s, e), count))
+
+  var selected = []
+  for (var i = minV - 1; i <= maxV - 1; i++) {
+    var v = verses[i]
+    if (v && !v.omitted) selected.push(v)
+  }
+
+  var fmt = copyFormat || DEFAULT_COPY_FORMAT
+  var isSingle = (minV === maxV)
+  var body = ""
+
+  if (selected.length === 0) {
+    body = OMITTED_VERSE_TEXT
+  } else if (isSingle) {
+    body = selected[0].text
+  } else if (fmt === "paragraph") {
+    body = selected.map(function(v) { return v.text }).join(" ")
+  } else if (fmt === "lines") {
+    body = selected.map(function(v) { return v.n + " " + v.text }).join("\n")
+  } else {
+    // default: "numbered"
+    body = selected.map(function(v) { return v.n + " " + v.text }).join(" ")
+  }
+
+  var ref = Canon.formatRefRange(bookId, chapter, minV, maxV, false)
+  return '"' + body + '"\n— ' + ref
+}
+
 function parseState(json, bible) {
   var data = null
   try { data = json ? JSON.parse(json) : null } catch (e) { data = null }
   var book = Canon.DEFAULT_BOOK
   var chapter = Canon.DEFAULT_CHAPTER
   var verse = Canon.DEFAULT_VERSE
+  var copyFormat = DEFAULT_COPY_FORMAT
   if (data && typeof data === "object") {
     if (typeof data.book === "string" && Canon.bookById(data.book)) book = data.book
     if (typeof data.chapter === "number" && Canon.isValidPlace(book, data.chapter, 1))
       chapter = data.chapter
     if (typeof data.verse === "number" && data.verse >= 1 && Math.floor(data.verse) === data.verse)
       verse = data.verse
+    if (data.copyFormat === "numbered" || data.copyFormat === "paragraph" || data.copyFormat === "lines")
+      copyFormat = data.copyFormat
   }
   verse = clampVerse(bible, book, chapter, verse)
-  return { book: book, chapter: chapter, verse: verse }
+  return { book: book, chapter: chapter, verse: verse, copyFormat: copyFormat }
 }
 
-function serializeState(book, chapter, verse) {
+function serializeState(book, chapter, verse, copyFormat) {
   return JSON.stringify({
     version: STATE_VERSION,
     translation: "BSB",
     book: book,
     chapter: chapter,
-    verse: verse
+    verse: verse,
+    copyFormat: copyFormat || DEFAULT_COPY_FORMAT
   })
 }

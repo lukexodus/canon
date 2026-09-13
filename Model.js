@@ -59,23 +59,43 @@ function resolveReference(input, bible) {
   return place
 }
 
-function formatCopiedVerses(bible, bookId, chapter, startVerse, endVerse, copyFormat) {
+function formatCopiedVerses(bible, bookId, chapter, startVerseOrList, endVerse, copyFormat) {
   var verses = versesFor(bible, bookId, chapter)
   if (!verses || verses.length === 0) return ""
   var count = verses.length
-  var s = typeof startVerse === "number" && Math.floor(startVerse) === startVerse ? startVerse : 1
-  var e = typeof endVerse === "number" && Math.floor(endVerse) === endVerse ? endVerse : s
-  var minV = Math.max(1, Math.min(Math.min(s, e), count))
-  var maxV = Math.max(1, Math.min(Math.max(s, e), count))
+
+  var list = []
+  var fmt = DEFAULT_COPY_FORMAT
+
+  if (Array.isArray(startVerseOrList)) {
+    list = startVerseOrList
+    fmt = (typeof endVerse === "string" ? endVerse : copyFormat) || DEFAULT_COPY_FORMAT
+  } else {
+    var s = typeof startVerseOrList === "number" && Math.floor(startVerseOrList) === startVerseOrList ? startVerseOrList : 1
+    var e = typeof endVerse === "number" && Math.floor(endVerse) === endVerse ? endVerse : s
+    var minV = Math.max(1, Math.min(Math.min(s, e), count))
+    var maxV = Math.max(1, Math.min(Math.max(s, e), count))
+    for (var k = minV; k <= maxV; k++) list.push(k)
+    fmt = copyFormat || DEFAULT_COPY_FORMAT
+  }
+
+  var sortedNums = []
+  for (var i = 0; i < list.length; i++) {
+    var num = list[i]
+    if (typeof num === "number" && num >= 1 && num <= count && sortedNums.indexOf(num) === -1) {
+      sortedNums.push(num)
+    }
+  }
+  sortedNums.sort(function(a, b) { return a - b })
+  if (sortedNums.length === 0) return ""
 
   var selected = []
-  for (var i = minV - 1; i <= maxV - 1; i++) {
-    var v = verses[i]
+  for (var j = 0; j < sortedNums.length; j++) {
+    var v = verses[sortedNums[j] - 1]
     if (v && !v.omitted) selected.push(v)
   }
 
-  var fmt = copyFormat || DEFAULT_COPY_FORMAT
-  var isSingle = (minV === maxV)
+  var isSingle = (sortedNums.length === 1)
   var body = ""
 
   if (selected.length === 0) {
@@ -91,7 +111,7 @@ function formatCopiedVerses(bible, bookId, chapter, startVerse, endVerse, copyFo
     body = selected.map(function(v) { return v.n + " " + v.text }).join(" ")
   }
 
-  var ref = Canon.formatRefRange(bookId, chapter, minV, maxV, false)
+  var ref = Canon.formatRefList(bookId, chapter, sortedNums, false)
   return '"' + body + '"\n— ' + ref
 }
 

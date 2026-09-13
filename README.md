@@ -26,7 +26,7 @@ omarchy bar move andrewbacon.canon --section right
 - Scroll the chip to move to the previous or next chapter.
 - Type a reference (`jn 3:16`, `psalm 23`, `1 john 1`) and press Enter.
 - Use the book button to browse Old/New Testament, then a chapter.
-- Click a verse to select it, or **Shift-click** to select a range of verses.
+- Click a verse to select it, **Shift-click** to select a contiguous range, or **Ctrl-click** to toggle non-contiguous verses.
 - Copy verses to clipboard with attribution (`"..."` / `— Reference`) using:
   - Header copy button (`󰆏`)
   - Keyboard shortcut `Ctrl+C` (or `c` / `y` when search is unfocused)

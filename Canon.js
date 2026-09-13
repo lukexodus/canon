@@ -221,6 +221,42 @@ function formatRefRange(bookId, chapter, startVerse, endVerse, compact) {
   return name + " " + chapter + ":" + s + "-" + e
 }
 
+function formatVerseRanges(numbers) {
+  if (!numbers || numbers.length === 0) return ""
+  var sorted = numbers.slice().sort(function(a, b) { return a - b })
+  var unique = []
+  for (var i = 0; i < sorted.length; i++) {
+    var val = sorted[i]
+    if (typeof val !== "number" || isNaN(val)) continue
+    if (unique.length === 0 || val !== unique[unique.length - 1]) unique.push(val)
+  }
+  if (unique.length === 0) return ""
+  var ranges = []
+  var start = unique[0]
+  var prev = unique[0]
+  for (var j = 1; j < unique.length; j++) {
+    if (unique[j] === prev + 1) {
+      prev = unique[j]
+    } else {
+      ranges.push(start === prev ? String(start) : start + "-" + prev)
+      start = unique[j]
+      prev = unique[j]
+    }
+  }
+  ranges.push(start === prev ? String(start) : start + "-" + prev)
+  return ranges.join(", ")
+}
+
+function formatRefList(bookId, chapter, verseList, compact) {
+  var book = bookById(bookId)
+  var name = book ? (compact ? book.abbrev : book.name) : (bookId || "")
+  if (!chapter) return name || "Canon"
+  if (!verseList || verseList.length === 0) return name + " " + chapter
+  var rangeStr = formatVerseRanges(verseList)
+  if (!rangeStr) return name + " " + chapter
+  return name + " " + chapter + ":" + rangeStr
+}
+
 function parseReference(input) {
   var raw = String(input || "").trim()
   if (!raw) return null

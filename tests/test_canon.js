@@ -152,5 +152,27 @@ ok("omitted verse in range is skipped in body",
   omittedRangeCopied.endsWith('"\n— John 5:3-5')
 );
 
+ok("formatVerseRanges single", C.formatVerseRanges([13]) === "13");
+ok("formatVerseRanges contiguous", C.formatVerseRanges([9, 10, 11, 12, 13]) === "9-13");
+ok("formatVerseRanges non-contiguous", C.formatVerseRanges([9, 11, 13]) === "9, 11, 13");
+ok("formatVerseRanges mixed out of order", C.formatVerseRanges([15, 9, 10, 14, 12]) === "9-10, 12, 14-15");
+ok("formatRefList non-contiguous", C.formatRefList("Matthew", 6, [9, 11, 13]) === "Matthew 6:9, 11, 13");
+ok("formatRefList mixed ranges", C.formatRefList("Matthew", 6, [9, 10, 12, 14, 15]) === "Matthew 6:9-10, 12, 14-15");
+
+const nonContigCopied = M.formatCopiedVerses(bible, "Matthew", 6, [9, 11, 13], "numbered");
+ok("non-contiguous copy format numbered has only selected verses",
+  nonContigCopied.startsWith('"9 So then, this is how you should pray') &&
+  nonContigCopied.includes(' 11 Give us this day our daily bread.') &&
+  !nonContigCopied.includes('10 Your kingdom') &&
+  nonContigCopied.includes(' 13 And lead us not into temptation') &&
+  nonContigCopied.endsWith('"\n— Matthew 6:9, 11, 13')
+);
+
+const nonContigSingle = M.formatCopiedVerses(bible, "Matthew", 6, [13]);
+ok("single verse via array has no verse number in body",
+  nonContigSingle.startsWith('"And lead us not into temptation') &&
+  nonContigSingle.endsWith('"\n— Matthew 6:13')
+);
+
 console.log(fail === 0 ? `\n${pass} passed` : `\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

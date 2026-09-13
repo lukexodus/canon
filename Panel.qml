@@ -20,11 +20,9 @@ Panel {
   property string book: Canon.DEFAULT_BOOK
   property int chapter: Canon.DEFAULT_CHAPTER
   property int verse: Canon.DEFAULT_VERSE
-  property int selectionStart: root.verse
-  property int selectionEnd: root.verse
-  readonly property int selMin: Math.min(selectionStart, selectionEnd)
-  readonly property int selMax: Math.max(selectionStart, selectionEnd)
-  readonly property bool hasMultiSelection: selMin !== selMax
+  property var selectedVerses: [root.verse]
+  property int selectionAnchor: root.verse
+  readonly property bool hasMultiSelection: selectedVerses && selectedVerses.length > 1
   property string copyFormat: Model.DEFAULT_COPY_FORMAT
   property string copyNotice: ""
   property string searchText: ""
@@ -32,6 +30,46 @@ Panel {
   property string browseMode: "read" // read | books | chapters | settings
   property string browseTestament: "ot"
   property bool stateReady: false
+
+  function isVerseSelected(n) {
+    return root.selectedVerses && root.selectedVerses.indexOf(n) !== -1
+  }
+
+  function selectOnly(n) {
+    var v = Model.clampVerse(root.bible, root.book, root.chapter, n)
+    root.selectedVerses = [v]
+    root.selectionAnchor = v
+    root.verse = v
+  }
+
+  function toggleVerse(n) {
+    var v = Model.clampVerse(root.bible, root.book, root.chapter, n)
+    var list = root.selectedVerses ? root.selectedVerses.slice() : []
+    var idx = list.indexOf(v)
+    if (idx !== -1) {
+      if (list.length > 1) {
+        list.splice(idx, 1)
+        root.verse = list[list.length - 1]
+      }
+    } else {
+      list.push(v)
+      list.sort(function(a, b) { return a - b })
+      root.verse = v
+    }
+    root.selectedVerses = list
+    root.selectionAnchor = v
+  }
+
+  function selectRange(n) {
+    var target = Model.clampVerse(root.bible, root.book, root.chapter, n)
+    var anchor = root.selectionAnchor || root.verse
+    var s = Math.min(anchor, target)
+    var e = Math.max(anchor, target)
+    var list = []
+    for (var i = s; i <= e; i++) list.push(i)
+    root.selectedVerses = list
+    root.verse = target
+  }
 
   onSettingsChanged: {
     if (root.settings && typeof root.settings.copyFormat === "string") {
@@ -100,8 +138,8 @@ Panel {
     root.book = bookId
     root.chapter = chapter
     root.verse = Model.clampVerse(root.bible, bookId, chapter, verse || 1)
-    root.selectionStart = root.verse
-    root.selectionEnd = root.verse
+    root.selectedVerses = [root.verse]
+    root.selectionAnchor = root.verse
     root.searchError = ""
     root.browseMode = "read"
     if (persistNow !== false) root.persist()
@@ -134,10 +172,11 @@ Panel {
     verseList.positionViewAtIndex(idx, ListView.Contain)
   }
 
-  function copySelection(startV, endV) {
-    var s = (typeof startV === "number") ? startV : root.selMin
-    var e = (typeof endV === "number") ? endV : root.selMax
-    var text = Model.formatCopiedVerses(root.bible, root.book, root.chapter, s, e, root.copyFormat)
+  function copySelection(versesList) {
+    var list = Array.isArray(versesList) && versesList.length > 0
+      ? versesList
+      : (root.selectedVerses && root.selectedVerses.length > 0 ? root.selectedVerses : [root.verse])
+    var text = Model.formatCopiedVerses(root.bible, root.book, root.chapter, list, null, root.copyFormat)
     if (!text) return false
 
     try {
@@ -154,7 +193,7 @@ Panel {
       clipboardProxy.deselect()
     } catch (e2) {}
 
-    var ref = Canon.formatRefRange(root.book, root.chapter, s, e, false)
+    var ref = Canon.formatRefList(root.book, root.chapter, list, false)
     root.showCopyNotice("Copied " + ref)
     return true
   }
@@ -260,14 +299,14 @@ Panel {
         }
         if (event.modifiers & Qt.ShiftModifier) {
           if (event.key === Qt.Key_Down || event.text === "J") {
-            root.selectionEnd = Model.clampVerse(root.bible, root.book, root.chapter, root.selectionEnd + 1)
-            root.verse = root.selectionEnd
+            var nextV = Model.clampVerse(root.bible, root.book, root.chapter, root.verse + 1)
+            root.selectRange(nextV)
             root.scrollToVerse()
             event.accepted = true
             return
           } else if (event.key === Qt.Key_Up || event.text === "K") {
-            root.selectionEnd = Math.max(1, root.selectionEnd - 1)
-            root.verse = root.selectionEnd
+            var prevV = Math.max(1, root.verse - 1)
+            root.selectRange(prevV)
             root.scrollToVerse()
             event.accepted = true
             return
@@ -277,14 +316,10 @@ Panel {
       onMoveRequested: function(dx, dy) {
         if (dx !== 0) root.stepChapter(dx)
         if (dy < 0) {
-          root.verse = Math.max(1, root.verse - 1)
-          root.selectionStart = root.verse
-          root.selectionEnd = root.verse
+          root.selectOnly(Math.max(1, root.verse - 1))
         }
         if (dy > 0) {
-          root.verse = Model.clampVerse(root.bible, root.book, root.chapter, root.verse + 1)
-          root.selectionStart = root.verse
-          root.selectionEnd = root.verse
+          root.selectOnly(Model.clampVerse(root.bible, root.book, root.chapter, root.verse + 1))
         }
         if (dy !== 0) root.scrollToVerse()
       }
@@ -292,8 +327,7 @@ Panel {
         if (root.browseMode !== "read") {
           root.browseMode = "read"
         } else if (root.hasMultiSelection) {
-          root.selectionEnd = root.selectionStart
-          root.verse = root.selectionStart
+          root.selectOnly(root.verse)
         } else {
           root.close()
         }
@@ -385,7 +419,7 @@ Panel {
               iconText: "󰆏"
               foreground: root.hasMultiSelection ? accentColor : contentForeground
               tooltipText: root.hasMultiSelection
-                ? "Copy " + Canon.formatRefRange(root.book, root.chapter, root.selMin, root.selMax, false) + " (Ctrl+C)"
+                ? "Copy " + Canon.formatRefList(root.book, root.chapter, root.selectedVerses, false) + " (Ctrl+C)"
                 : "Copy " + Canon.formatRef(root.book, root.chapter, root.verse, false) + " (Ctrl+C)"
               onClicked: root.copySelection()
             }
@@ -467,7 +501,7 @@ Panel {
             required property var modelData
             required property int index
 
-            readonly property bool isSelected: modelData.n >= root.selMin && modelData.n <= root.selMax
+            readonly property bool isSelected: root.isVerseSelected(modelData.n)
             readonly property bool isCurrent: modelData.n === root.verse
 
             width: verseList.width
@@ -514,7 +548,7 @@ Panel {
                   if (isSelected && root.hasMultiSelection) {
                     root.copySelection()
                   } else {
-                    root.copySelection(modelData.n, modelData.n)
+                    root.copySelection([modelData.n])
                   }
                 }
               }
@@ -532,21 +566,18 @@ Panel {
                   if (isSelected && root.hasMultiSelection) {
                     root.copySelection()
                   } else {
-                    root.selectionStart = modelData.n
-                    root.selectionEnd = modelData.n
-                    root.verse = modelData.n
-                    root.copySelection(modelData.n, modelData.n)
+                    root.selectOnly(modelData.n)
+                    root.copySelection([modelData.n])
                   }
                   return
                 }
 
-                if (mouse.modifiers & Qt.ShiftModifier) {
-                  root.selectionEnd = modelData.n
-                  root.verse = modelData.n
+                if (mouse.modifiers & Qt.ControlModifier) {
+                  root.toggleVerse(modelData.n)
+                } else if (mouse.modifiers & Qt.ShiftModifier) {
+                  root.selectRange(modelData.n)
                 } else {
-                  root.selectionStart = modelData.n
-                  root.selectionEnd = modelData.n
-                  root.verse = modelData.n
+                  root.selectOnly(modelData.n)
                   root.persist()
                 }
               }

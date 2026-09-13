@@ -230,6 +230,15 @@ Panel {
   readonly property var browseBooks: root.browseTestament === "nt" ? root.ntBooks : root.otBooks
   readonly property var currentBookInfo: Canon.bookById(root.book)
   readonly property int chapterTotal: currentBookInfo ? currentBookInfo.chapters : 0
+  readonly property var nextChapterPlace: Canon.nextChapter(root.book, root.chapter)
+  readonly property bool hasNextChapter: {
+    if (!root.nextChapterPlace) return false
+    return root.nextChapterPlace.book !== root.book || root.nextChapterPlace.chapter !== root.chapter
+  }
+  readonly property string nextChapterLabel: {
+    if (!root.hasNextChapter) return ""
+    return Canon.formatRef(root.nextChapterPlace.book, root.nextChapterPlace.chapter, 0, false)
+  }
 
   function open() {
     if (searchField.activeFocus) searchField.focus = false
@@ -904,6 +913,61 @@ Panel {
                 } else {
                   root.selectOnly(modelData.n)
                   root.persist()
+                }
+              }
+            }
+          }
+
+          footer: Component {
+            Item {
+              width: verseList.width
+              height: root.hasNextChapter ? Style.space(56) : Style.space(12)
+              visible: root.hasNextChapter
+
+              Rectangle {
+                id: nextChapterBanner
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.topMargin: Style.space(8)
+                height: Style.space(38)
+                radius: Style.space(6)
+                color: bannerMouse.containsMouse
+                  ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.15)
+                  : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05)
+                border.width: 1
+                border.color: bannerMouse.containsMouse
+                  ? root.accentColor
+                  : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.15)
+
+                Row {
+                  anchors.centerIn: parent
+                  spacing: Style.space(8)
+
+                  Text {
+                    text: "Next Chapter: " + root.nextChapterLabel
+                    color: bannerMouse.containsMouse ? root.accentColor : root.contentForeground
+                    font.family: contentFontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    font.bold: true
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+
+                  Text {
+                    text: "󰒭"
+                    color: root.accentColor
+                    font.family: contentFontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+                }
+
+                MouseArea {
+                  id: bannerMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.stepChapter(1)
                 }
               }
             }

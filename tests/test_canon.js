@@ -55,6 +55,18 @@ ok("next wraps to next book", (() => {
   const n = C.nextChapter("Malachi", 4);
   return n.book === "Matthew" && n.chapter === 1;
 })());
+ok("next within same book", (() => {
+  const n = C.nextChapter("Mark", 1);
+  return n.book === "Mark" && n.chapter === 2;
+})());
+ok("next across book boundary", (() => {
+  const n = C.nextChapter("Matthew", 28);
+  return n.book === "Mark" && n.chapter === 1;
+})());
+ok("next stops at end of Revelation", (() => {
+  const n = C.nextChapter("Revelation", 22);
+  return n.book === "Revelation" && n.chapter === 22;
+})());
 ok("prev wraps to prev book", (() => {
   const n = C.prevChapter("Matthew", 1);
   return n.book === "Malachi" && n.chapter === 4;

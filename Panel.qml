@@ -526,6 +526,15 @@ Panel {
             return
           }
         }
+        if (((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_F) || (!event.modifiers && event.key === Qt.Key_Slash)) {
+          if (root.browseMode !== "read") {
+            root.browseMode = "read"
+          }
+          searchField.forceActiveFocus()
+          searchField.selectAll()
+          event.accepted = true
+          return
+        }
         if ((event.modifiers & Qt.ControlModifier) && (event.key === Qt.Key_C || event.key === Qt.Key_Insert)) {
           root.copySelection()
           event.accepted = true
@@ -765,7 +774,7 @@ Panel {
         TextField {
           id: searchField
           width: parent.width
-          placeholderText: "john 3:16"
+          placeholderText: "john 3:16 (Ctrl+F)"
           foreground: contentForeground
           font.family: contentFontFamily
           text: root.searchText
@@ -779,6 +788,9 @@ Panel {
             if (event.key === Qt.Key_Escape) {
               event.accepted = true
               root.close()
+            } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_F) {
+              event.accepted = true
+              searchField.selectAll()
             } else if ((event.modifiers & Qt.AltModifier) && event.key === Qt.Key_Left) {
               if (root.goBack()) {
                 event.accepted = true

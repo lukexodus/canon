@@ -506,7 +506,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(380))
+    contentWidth: panel.fittedContentWidth(Style.space(400))
     contentHeight: panel.fittedContentHeight(Style.space(520))
 
     PanelKeyCatcher {
@@ -542,6 +542,11 @@ Panel {
         }
         if (event.key === Qt.Key_C || event.key === Qt.Key_Y) {
           root.copySelection()
+          event.accepted = true
+          return
+        }
+        if (((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_B) || (!event.modifiers && event.key === Qt.Key_B)) {
+          root.toggleCurrentBookmark()
           event.accepted = true
           return
         }
@@ -650,8 +655,8 @@ Panel {
             Column {
               id: titleCol
               width: Math.max(Style.space(60), headerRow.width
-                - (backBtn.width + fwdBtn.width + prevBtn.width + nextBtn.width + copyBtn.width + bookmarkToggleBtn.width + booksBtn.width + bookmarksBtn.width + settingsBtn.width)
-                - (headerRow.spacing * 9))
+                - (backBtn.width + fwdBtn.width + prevBtn.width + nextBtn.width + booksBtn.width + bookmarksBtn.width + settingsBtn.width)
+                - (headerRow.spacing * 7))
               spacing: Style.space(2)
               anchors.verticalCenter: parent.verticalCenter
 
@@ -694,34 +699,6 @@ Panel {
               foreground: contentForeground
               tooltipText: "Next chapter"
               onClicked: root.stepChapter(1)
-            }
-
-            Button {
-              id: copyBtn
-              width: Style.space(28)
-              implicitHeight: Style.space(28)
-              horizontalPadding: 0
-              verticalPadding: 0
-              iconText: "󰆏"
-              foreground: root.hasMultiSelection ? accentColor : contentForeground
-              tooltipText: root.hasMultiSelection
-                ? "Copy " + Canon.formatRefList(root.book, root.chapter, root.selectedVerses, false) + " (Ctrl+C)"
-                : "Copy " + Canon.formatRef(root.book, root.chapter, root.verse, false) + " (Ctrl+C)"
-              onClicked: root.copySelection()
-            }
-
-            Button {
-              id: bookmarkToggleBtn
-              width: Style.space(28)
-              implicitHeight: Style.space(28)
-              horizontalPadding: 0
-              verticalPadding: 0
-              iconText: root.isCurrentBookmarked ? "󰃄" : "󰃃"
-              foreground: root.isCurrentBookmarked ? accentColor : contentForeground
-              tooltipText: root.isCurrentBookmarked
-                ? "Remove bookmark for " + (root.hasMultiSelection ? Canon.formatRefList(root.book, root.chapter, root.selectedVerses, false) : Canon.formatRef(root.book, root.chapter, root.verse, false))
-                : "Bookmark " + (root.hasMultiSelection ? Canon.formatRefList(root.book, root.chapter, root.selectedVerses, false) : Canon.formatRef(root.book, root.chapter, root.verse, false))
-              onClicked: root.toggleCurrentBookmark()
             }
 
             Button {

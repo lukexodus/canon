@@ -828,64 +828,12 @@ Panel {
             radius: Style.space(4)
             color: isSelected
               ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.15)
-              : (verseMouse.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05) : "transparent")
+              : (verseHover.hovered ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05) : "transparent")
             border.width: isCurrent ? 1 : 0
             border.color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.5)
 
-            Row {
-              id: rowContent
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.margins: Style.space(4)
-              anchors.verticalCenter: parent.verticalCenter
-              spacing: Style.space(4)
-
-              Text {
-                id: verseText
-                width: parent.width - (verseMouse.containsMouse || isSelected || isBookmarked ? Style.space(56) : 0)
-                text: modelData.n + "  " + modelData.text
-                color: isSelected ? root.accentColor : (modelData.omitted ? mutedForeground : contentForeground)
-                font.italic: modelData.omitted
-                font.family: contentFontFamily
-                font.pixelSize: root.versePixelSize
-                wrapMode: Text.WordWrap
-              }
-
-              Button {
-                width: Style.space(24)
-                implicitHeight: Style.space(24)
-                anchors.verticalCenter: parent.verticalCenter
-                visible: verseMouse.containsMouse || isBookmarked
-                horizontalPadding: 0
-                verticalPadding: 0
-                iconText: isBookmarked ? "󰃄" : "󰃃"
-                foreground: isBookmarked ? root.accentColor : contentForeground
-                tooltipText: isBookmarked
-                  ? "Remove bookmark for verse " + modelData.n
-                  : "Bookmark verse " + modelData.n
-                onClicked: root.toggleBookmark(root.book, root.chapter, modelData.n, [modelData.n])
-              }
-
-              Button {
-                width: Style.space(24)
-                implicitHeight: Style.space(24)
-                anchors.verticalCenter: parent.verticalCenter
-                visible: verseMouse.containsMouse || (isSelected && root.hasMultiSelection)
-                horizontalPadding: 0
-                verticalPadding: 0
-                iconText: "󰆏"
-                foreground: isSelected ? root.accentColor : contentForeground
-                tooltipText: isSelected && root.hasMultiSelection
-                  ? "Copy selected verses"
-                  : "Copy verse " + modelData.n
-                onClicked: {
-                  if (isSelected && root.hasMultiSelection) {
-                    root.copySelection()
-                  } else {
-                    root.copySelection([modelData.n])
-                  }
-                }
-              }
+            HoverHandler {
+              id: verseHover
             }
 
             MouseArea {
@@ -913,6 +861,63 @@ Panel {
                 } else {
                   root.selectOnly(modelData.n)
                   root.persist()
+                }
+              }
+            }
+
+            Row {
+              id: rowContent
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.margins: Style.space(4)
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(4)
+              z: 1
+
+              Text {
+                id: verseText
+                width: parent.width - (verseHover.hovered || isSelected || isBookmarked ? Style.space(56) : 0)
+                text: modelData.n + "  " + modelData.text
+                color: isSelected ? root.accentColor : (modelData.omitted ? mutedForeground : contentForeground)
+                font.italic: modelData.omitted
+                font.family: contentFontFamily
+                font.pixelSize: root.versePixelSize
+                wrapMode: Text.WordWrap
+              }
+
+              Button {
+                width: Style.space(24)
+                implicitHeight: Style.space(24)
+                anchors.verticalCenter: parent.verticalCenter
+                visible: verseHover.hovered || isBookmarked
+                horizontalPadding: 0
+                verticalPadding: 0
+                iconText: isBookmarked ? "󰃄" : "󰃃"
+                foreground: isBookmarked ? root.accentColor : contentForeground
+                tooltipText: isBookmarked
+                  ? "Remove bookmark for verse " + modelData.n
+                  : "Bookmark verse " + modelData.n
+                onClicked: root.toggleBookmark(root.book, root.chapter, modelData.n, [modelData.n])
+              }
+
+              Button {
+                width: Style.space(24)
+                implicitHeight: Style.space(24)
+                anchors.verticalCenter: parent.verticalCenter
+                visible: verseHover.hovered || (isSelected && root.hasMultiSelection)
+                horizontalPadding: 0
+                verticalPadding: 0
+                iconText: "󰆏"
+                foreground: isSelected ? root.accentColor : contentForeground
+                tooltipText: isSelected && root.hasMultiSelection
+                  ? "Copy selected verses"
+                  : "Copy verse " + modelData.n
+                onClicked: {
+                  if (isSelected && root.hasMultiSelection) {
+                    root.copySelection()
+                  } else {
+                    root.copySelection([modelData.n])
+                  }
                 }
               }
             }
@@ -1317,7 +1322,7 @@ Panel {
                     color: mutedForeground
                     font.family: contentFontFamily
                     font.pixelSize: Style.font.caption
-                    maxLineCount: 2
+                    maximumLineCount: 2
                     elide: Text.ElideRight
                     wrapMode: Text.WordWrap
                     visible: modelData.preview && modelData.preview !== ""
